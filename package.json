@@ -6,8 +6,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "test": "npm run test:engine && npm run test:rules",
+    "test": "npm run test:engine && npm run test:page && npm run test:rules",
     "test:engine": "node --test engine.test.mjs",
+    "test:page": "node --test page.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-number-bomb \"node --test firestore.rules.test.mjs\"",
     "deploy": "firebase deploy --only hosting,firestore:rules",
     "deploy:rules": "firebase deploy --only firestore:rules",
