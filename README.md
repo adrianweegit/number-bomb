@@ -102,6 +102,25 @@ The page tells you which backend it found, in the badge top-left:
 - Guess **above** the bomb → your number becomes the new ceiling.
 - Guess the bomb exactly → **BOOM**. Game over, and it's on you.
 
+### The lucky spin
+
+Every turn opens with one. You pull the lever before you are allowed to guess,
+and the wheel gives you one of three things:
+
+| Outcome | Odds | What it means |
+|---|---|---|
+| **Business as usual** | 50% | One guess, as above. |
+| **Double trouble** | 25% | Two guesses, both yours. The second one needs no second spin — and the first one may well have narrowed the range under your own feet. |
+| **Skip this turn** | 25% | No guess at all. The range is untouched, you may still talk your trash, and the turn passes on. |
+
+A skipped turn is written to the log like any other, so nobody has to guess why
+the turn order jumped.
+
+The wheel is drawn on the phone that is up. Security rules can check a write but
+never compute one, so the outcome cannot be adjudicated server-side — it is the
+same class of trust as the bomb itself. See "What this does not protect
+against".
+
 Excluding the bounds is what makes the game terminate. Because the bomb always
 sits strictly between the floor and the ceiling, there is always at least one
 legal guess left, and the range loses at least one number every turn. When the
@@ -123,20 +142,28 @@ npm run test:engine   # rules of the game — no network, no dependencies
 npm run test:rules    # security rules, against the Firestore emulator (needs Java)
 ```
 
-**34 engine tests.** The important one walks every game to completion using the
-slowest legal strategy and asserts it always detonates — never a deadlock,
+**53 engine tests.** The important one walks every game to completion using the
+slowest legal strategy — and again with random spins, skips and doubles — and
+asserts it always detonates — never a deadlock,
 never a state with no legal move. The rest cover the trust boundary: a turn code
 or room document is data from someone else's phone, so a tampered or truncated
 one is discarded outright rather than half-loaded into an unplayable game.
 
-**25 security-rule tests.** These guard a database anyone with the link can
+**41 security-rule tests.** These guard a database anyone with the link can
 reach, so they run on every push. Verified refused, for a client writing
 straight to Firestore with the page's own credentials and no interface in the
 way: moving out of turn, guessing outside or on the bounds, shifting the wrong
 bound, skipping a player, rewriting or truncating the log, re-arming the bomb,
 editing the roster, changing the forfeit, blaming someone else for a
 detonation, playing on after it, starting or dealing a rematch without being
-host, deleting someone else's room, taking someone else's seat.
+host, deleting someone else's room, taking someone else's seat. And, since the
+lucky spin: spinning out of turn or twice, claiming more guesses than the
+outcome allows, moving the game while pretending to spin, guessing without a
+spin, faking a skip, stretching Double Trouble into a third guess.
+
+The last of them plays a whole game — spins, skips, doubles and all — through
+the emulator using the engine the page actually ships, so the rules and the
+engine cannot drift apart without it failing.
 
 One of them plays a 120-move game on purpose. Firestore caps rule evaluation at
 1000 expressions per request and re-evaluates a rules function at every call
@@ -156,6 +183,11 @@ means Firebase's Blaze plan.
 
 This is a game about who eats the last spring roll. If your group has that one
 person, play pass-the-phone on one device, where there is nothing to inspect.
+
+**A determined player can rig the wheel.** Same reason. The spin is drawn on
+the phone that is up and merely declared to the room; the rules check that the
+turn which follows matches what was declared, but they cannot check the draw
+itself. A modified client could spin Skip every turn.
 
 **Nothing can reach you once the browser is fully closed.** This is a static
 site with no server of its own, and a web page cannot send a notification when

@@ -43,6 +43,7 @@
   --accent:#FF4D3D;
   --accent-soft:#FFE1DC;
   --grape:#5B3C9E;
+  --on-grape:#fff;
   --lemon:#FFC93C;
   --lemon-ink:#6B5300;
   --safe:#2E9E6B;
@@ -59,7 +60,7 @@
     --ground:#1E1630; --panel:#2A1F42; --panel-2:#362A52;
     --ink:#F6EFFF; --muted:#A99BC2; --line:#4A3A6B;
     --accent:#FF6A57; --accent-soft:#4A2233;
-    --grape:#B79BFF; --lemon:#FFD25E; --lemon-ink:#3A2B00;
+    --grape:#B79BFF; --on-grape:#241C2E; --lemon:#FFD25E; --lemon-ink:#3A2B00;
     --safe:#4FD0A0;
     --drop:4px 4px 0 rgba(0,0,0,.55); --drop-sm:3px 3px 0 rgba(0,0,0,.55);
   }
@@ -68,7 +69,7 @@
   --ground:#1E1630; --panel:#2A1F42; --panel-2:#362A52;
   --ink:#F6EFFF; --muted:#A99BC2; --line:#4A3A6B;
   --accent:#FF6A57; --accent-soft:#4A2233;
-  --grape:#B79BFF; --lemon:#FFD25E; --lemon-ink:#3A2B00;
+  --grape:#B79BFF; --on-grape:#241C2E; --lemon:#FFD25E; --lemon-ink:#3A2B00;
   --safe:#4FD0A0;
   --drop:4px 4px 0 rgba(0,0,0,.55); --drop-sm:3px 3px 0 rgba(0,0,0,.55);
 }
@@ -282,6 +283,34 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .stake b{font-weight:800}
 .stake .label{display:block;margin-bottom:3px;color:var(--lemon-ink)}
 
+/* ---------- lucky spin ---------- */
+.spin-rig{display:flex;flex-direction:column;gap:10px}
+.spinner{
+  display:flex;align-items:center;justify-content:center;min-height:62px;padding:12px 14px;
+  border:var(--edge) solid var(--ink);border-radius:14px;box-shadow:var(--drop-sm);
+  background:repeating-linear-gradient(-45deg,var(--panel-2) 0 12px,var(--panel) 12px 24px);
+  text-align:center;overflow:hidden;
+}
+.spin-word{
+  font:400 17px/1.15 Bungee,Impact,sans-serif;letter-spacing:.02em;color:var(--ink);
+  overflow-wrap:anywhere;
+}
+.spinner[data-spin="rolling"]{background:var(--lemon)}
+.spinner[data-spin="rolling"] .spin-word{color:var(--lemon-ink);opacity:.85}
+.spinner[data-spin="normal"]{background:var(--panel);}
+.spinner[data-spin="double"]{background:var(--grape);border-color:var(--ink)}
+/* grape flips from dark purple to light lavender in dark mode, so the
+   word on top of it has to flip with it. */
+.spinner[data-spin="double"] .spin-word{color:var(--on-grape)}
+.spinner[data-spin="skip"]{background:var(--accent-soft)}
+.spinner[data-spin="skip"] .spin-word{color:var(--accent)}
+.spinner[data-spin="normal"] .spin-word,
+.spinner[data-spin="idle"] .spin-word{color:var(--ink)}
+@media (prefers-reduced-motion: no-preference){
+  .spinner[data-spin="double"],.spinner[data-spin="skip"]{animation:landed .35s ease}
+  @keyframes landed{from{transform:scale(.94) rotate(-1.5deg)}to{transform:none}}
+}
+
 /* ---------- guess deck ---------- */
 .deck{display:flex;gap:10px}
 .deck input{flex:1 1 auto;min-width:0;font-size:22px;text-align:center;padding:13px}
@@ -321,6 +350,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .log .mv.up{color:var(--safe)}
 .log .mv.dn{color:var(--grape)}
 .log .mv.bx{color:var(--accent)}
+.log .mv.sk{color:var(--grape);opacity:.85}
 .log .msg{
   grid-column:2 / -1;margin-top:4px;font-size:13.5px;font-style:italic;
   color:var(--muted);overflow-wrap:anywhere;
@@ -335,6 +365,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 }
 .verdict.up{color:var(--safe)}
 .verdict.dn{color:var(--grape)}
+.verdict.sk{color:var(--muted)}
 
 /* ---------- game over ---------- */
 .boom-card{border-color:var(--accent);box-shadow:4px 4px 0 var(--accent)}
@@ -686,6 +717,15 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
       <div><span class="label">If you pop it</span><p>Loser <b id="stakeText">&mdash;</b></p></div>
     </div>
 
+    <div class="spin-rig" id="spinBlock">
+      <span class="label">Lucky spin</span>
+      <div class="spinner" id="spinner" data-spin="idle">
+        <span class="spin-word" id="spinWord">LUCKY SPIN</span>
+      </div>
+      <p class="hint" id="spinNote" aria-live="polite">Spin first &mdash; the wheel decides what kind of turn you get.</p>
+      <button class="btn btn--primary btn--wide" id="spinBtn" type="button">Pull the lever</button>
+    </div>
+
     <div id="guessBlock">
       <label class="label" for="guess" style="display:block;margin-bottom:7px">Pick a number in the live range</label>
       <div class="deck">
@@ -693,9 +733,13 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
         <button class="btn btn--primary" id="guessBtn" type="button">Guess</button>
       </div>
       <p class="odds" id="oddsLine" aria-live="polite"><span id="oddsMain"></span><span id="oddsFutures"></span></p>
-      <input type="text" id="sayIt" maxlength="80" autocomplete="off" style="margin-top:9px"
-             placeholder="Trash talk (optional)" aria-label="Optional message with your guess">
     </div>
+
+    <div id="sayBlock">
+      <input type="text" id="sayIt" maxlength="80" autocomplete="off"
+             placeholder="Trash talk (optional)" aria-label="Optional message with your turn">
+    </div>
+    <button class="btn btn--wide" id="skipBtn" type="button" hidden>Sit it out &amp; pass it on</button>
     <button class="btn btn--wa btn--wide" id="nudgeBtn" type="button" hidden>Nudge them on WhatsApp</button>
     <p class="err" id="playErr" hidden></p>
 
@@ -782,7 +826,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 // Pure game rules + codecs. No DOM and no network in here — the test suite
 // loads this block directly.
 const ENGINE = (() => {
-  const VERSION = 2;
+  const VERSION = 3;
   const MAX_PLAYERS = 10;
   // A line of chat rides along with a move. Bounded because it lands in a
   // document everyone in the room can read, and Firestore caps a document
@@ -791,6 +835,14 @@ const ENGINE = (() => {
   const KEY = "pathfinder-number-bomb-v1";
   const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
   const MODES = ["pass", "relay", "online"];
+
+  // Every turn opens with a spin. Weighted, not thirds: most turns should still
+  // play normally, so the wheel stays a jolt rather than the main event.
+  // SPIN_ODDS are percentages and must sum to 100.
+  const SPINS = ["normal", "double", "skip"];
+  const SPIN_ODDS = { normal: 50, double: 25, skip: 25 };
+  // How many guesses each outcome owes. "skip" owes none and ends the turn.
+  const SPIN_GUESSES = { normal: 1, double: 2, skip: 0 };
 
   const PENALTIES = [
     "eats the last piece on the dish",
@@ -824,6 +876,10 @@ const ENGINE = (() => {
       penalty: String(penalty || PENALTIES[0]).trim() || PENALTIES[0],
       mode: MODES.includes(mode) ? mode : "pass",
       turn: 0,
+      // The turn's spin and the guesses it still owes. "" means nobody has
+      // spun yet, so no guess is legal.
+      spin: "",
+      left: 0,
       history: [],
       over: false,
       loser: null
@@ -836,6 +892,9 @@ const ENGINE = (() => {
    */
   function validateGuess(state, raw){
     if (state.over) return { ok:false, reason:"This game is already over." };
+    if (state.spin === "") return { ok:false, reason:"Spin first — the wheel decides your turn." };
+    if (state.spin === "skip") return { ok:false, reason:"Your spin said skip. No guess this turn." };
+    if (state.left <= 0) return { ok:false, reason:"No guesses left this turn." };
     const text = String(raw ?? "").trim();
     if (!text) return { ok:false, reason:"Type a number first." };
     const g = Number(text);
@@ -847,7 +906,50 @@ const ENGINE = (() => {
     return { ok:true, value:g };
   }
 
-  /** Returns a new state. Turn advances only on a legal, non-fatal guess. */
+  /** Weighted draw over SPIN_ODDS. Only the client that is up ever calls it. */
+  function randomSpin(){
+    let r = Math.floor(Math.random() * 100);
+    for (const name of SPINS){
+      if (r < SPIN_ODDS[name]) return name;
+      r -= SPIN_ODDS[name];
+    }
+    return "normal";
+  }
+
+  /**
+   * Records the turn's spin. Nothing else moves: the log, the bounds and whose
+   * turn it is all stay put, and `left` is the only thing that unlocks guessing.
+   * Double Trouble sets it to 2, which is what lets the second guess be taken
+   * without spinning again.
+   */
+  function applySpin(state, outcome){
+    if (state.over) throw new Error("This game is already over.");
+    if (state.spin !== "") throw new Error("You have already spun this turn.");
+    if (!SPINS.includes(outcome)) throw new Error("That isn't a spin outcome.");
+    return { ...state, spin: outcome, left: SPIN_GUESSES[outcome] };
+  }
+
+  /**
+   * Ends a skipped turn. It still lands in the log — a turn that produced no
+   * guess would otherwise look, on everyone else's phone, like the turn order
+   * jumping for no reason.
+   */
+  function endSkip(state, message){
+    if (state.over) throw new Error("This game is already over.");
+    if (state.spin !== "skip") throw new Error("Nothing to skip — spin first.");
+    const said = typeof message === "string" ? message.trim().slice(0, MAX_MESSAGE) : "";
+    const move = { p: state.turn, side: "skip" };
+    if (said) move.m = said;
+    return {
+      ...state,
+      history: state.history.concat([move]),
+      turn: (state.turn + 1) % state.players.length,
+      spin: "",
+      left: 0
+    };
+  }
+
+  /** Returns a new state. Turn advances only once the spin's guesses are spent. */
   /** `message` is optional; an empty one leaves no field on the move at all. */
   function applyGuess(state, guess, message){
     const check = validateGuess(state, guess);
@@ -863,11 +965,19 @@ const ENGINE = (() => {
       entry.side = "boom";
       next.over = true;
       next.loser = state.turn;
+      next.spin = "";
+      next.left = 0;
       return next;
     }
     entry.side = g < state.secret ? "low" : "high";
     if (g < state.secret) next.lo = g; else next.hi = g;
-    next.turn = (state.turn + 1) % state.players.length;
+    // Double Trouble still owes a guess, so the turn does not move on yet.
+    next.left = state.left - 1;
+    if (next.left <= 0){
+      next.left = 0;
+      next.spin = "";
+      next.turn = (state.turn + 1) % state.players.length;
+    }
     return next;
   }
 
@@ -938,19 +1048,26 @@ const ENGINE = (() => {
     if (!s || typeof s !== "object" || s.v !== VERSION) return false;
     if (!Array.isArray(s.players) || s.players.length < 2 || s.players.length > MAX_PLAYERS) return false;
     if (!s.players.every(p => typeof p === "string" && p.trim() !== "")) return false;
-    if (![s.lo0, s.hi0, s.lo, s.hi, s.secret, s.turn].every(int)) return false;
+    if (![s.lo0, s.hi0, s.lo, s.hi, s.secret, s.turn, s.left].every(int)) return false;
     if (s.hi0 - s.lo0 < 2) return false;
     if (s.lo < s.lo0 || s.hi > s.hi0 || s.lo >= s.hi) return false;
     if (s.secret <= s.lo || s.secret >= s.hi) return false;
     if (s.turn < 0 || s.turn >= s.players.length) return false;
+    // spin and left have to agree, or a tampered state could mint extra guesses
+    if (!["", "skip", "normal", "double"].includes(s.spin)) return false;
+    if (s.spin === "double" ? (s.left !== 1 && s.left !== 2)
+                            : s.left !== (SPIN_GUESSES[s.spin] || 0)) return false;
     if (typeof s.over !== "boolean") return false;
+    if (s.over && (s.spin !== "" || s.left !== 0)) return false;
     if (s.over ? !(int(s.loser) && s.loser >= 0 && s.loser < s.players.length) : s.loser !== null) return false;
     if (typeof s.penalty !== "string" || s.penalty.trim() === "") return false;
     if (!MODES.includes(s.mode)) return false;
     if (!Array.isArray(s.history)) return false;
     return s.history.every(e =>
       e && typeof e === "object" && int(e.p) && e.p >= 0 && e.p < s.players.length &&
-      int(e.g) && ["low", "high", "boom"].includes(e.side) &&
+      (e.side === "skip"
+        ? e.g === undefined
+        : (int(e.g) && ["low", "high", "boom"].includes(e.side))) &&
       (e.m === undefined ||
         (typeof e.m === "string" && e.m.length > 0 && e.m.length <= MAX_MESSAGE)));
   }
@@ -979,7 +1096,9 @@ const ENGINE = (() => {
 
   return {
     VERSION, MAX_PLAYERS, MAX_MESSAGE, MODES, PENALTIES, CODE_ALPHABET,
+    SPINS, SPIN_ODDS, SPIN_GUESSES,
     remaining, createGame, validateGuess, applyGuess, rematch, randomSecret,
+    randomSpin, applySpin, endSkip,
     newRoomCode, encodeState, decodeState, isValidState, toDoc, fromDoc,
     hideNumber, showNumber
   };
@@ -1017,7 +1136,7 @@ const ENGINE = (() => {
     localMode: "pass", promptedFor: -1, showingOver: false,
     backend: null, bootError: "",
     seenHistory: 0, wasHidden: false, installEvent: null,
-    lastTaunt: "", tauntTurn: -1,
+    lastTaunt: "", tauntTurn: -1, spinning: false,
     randomArmed: { host: false, local: false }
   };
 
@@ -1353,6 +1472,36 @@ const ENGINE = (() => {
   // ---------- rendering the board ------------------------------------------
   const pct = n => { const span = S.state.hi0 - S.state.lo0; return span <= 0 ? 0 : ((n - S.state.lo0) / span) * 100; };
 
+  const SPIN_LABEL = { normal: "BUSINESS AS USUAL", double: "DOUBLE TROUBLE", skip: "SKIP THIS TURN" };
+
+  /** One line of plain English for the wheel, written for whoever is reading it. */
+  function spinNote(st, yours){
+    const who = st.players[st.turn];
+    if (st.spin === "") return yours
+      ? "Spin first — the wheel decides what kind of turn you get."
+      : `${who} has to spin before they can guess.`;
+    if (st.spin === "skip") return yours
+      ? "Sit this one out. Say your piece on the way past, if you must."
+      : `${who} spun straight out of this turn.`;
+    if (st.spin === "double") return st.left === 2
+      ? (yours ? "Two guesses, both yours, and no second spin. Good luck."
+               : `${who} owes two guesses this turn.`)
+      : (yours ? "One more guess to go — and you still have to make it."
+               : `${who} has one guess still to make.`);
+    return yours ? "One guess, same as always. Count your blessings."
+                 : `${who} drew an ordinary turn.`;
+  }
+
+  /** Whatever the turn currently needs from you — the lever, a number, or the exit. */
+  function focusTurn(){
+    const st = S.state;
+    if (!st || st.over) return;
+    if (S.online && !isMyTurn()) return;
+    if (st.spin === "") $("spinBtn").focus();
+    else if (st.spin === "skip") $("skipBtn").focus();
+    else $("guess").focus();
+  }
+
   function renderLog(host){
     const st = S.state;
     host.textContent = "";
@@ -1361,9 +1510,11 @@ const ENGINE = (() => {
       const no = document.createElement("span");
       no.className = "n"; no.textContent = String(st.history.length - idx).padStart(2, "0");
       const nm = document.createElement("span");
-      nm.className = "nm"; nm.textContent = `${st.players[h.p]} · ${h.g}`;
+      nm.className = "nm";
+      nm.textContent = h.side === "skip" ? st.players[h.p] : `${st.players[h.p]} · ${h.g}`;
       const mv = document.createElement("span");
       if (h.side === "boom"){ mv.className = "mv bx"; mv.textContent = "BOOM"; }
+      else if (h.side === "skip"){ mv.className = "mv sk"; mv.textContent = "spun SKIP"; }
       else if (h.side === "low"){ mv.className = "mv up"; mv.textContent = `floor → ${h.g}`; }
       else { mv.className = "mv dn"; mv.textContent = `ceiling → ${h.g}`; }
       li.append(no, nm, mv);
@@ -1389,13 +1540,21 @@ const ENGINE = (() => {
       ? `Room ${S.code} &middot; ${st.lo}&ndash;${st.hi}`
       : `Live &middot; ${st.lo}&ndash;${st.hi}`;
 
+    const yours = !(S.online && !mine);
+    const spun = st.spin !== "";
+    const rangeLine = st.lo + 2 === st.hi
+      ? `Only ${st.lo + 1} is left. We both know how this ends.`
+      : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
+    const turnLine = !spun ? "Pull the lever before you guess."
+      : st.spin === "skip" ? "The wheel says sit this one out."
+      : st.spin === "double" && st.left === 2 ? `Two guesses this turn. ${rangeLine}`
+      : rangeLine;
+
     const bar = $("turnBar");
     bar.className = "turnbar" + (mine && S.online ? " mine" : "");
     if (S.online && mine){
       $("turnName").textContent = "Your turn";
-      $("turnSub").textContent = (st.lo + 2 === st.hi
-        ? `Only ${st.lo + 1} is left. We both know how this ends.`
-        : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`);
+      $("turnSub").textContent = turnLine;
     } else if (S.online){
       $("turnName").textContent = `${st.players[st.turn]} is up`;
       $("turnSub").textContent = mySeatIndex() < 0
@@ -1403,9 +1562,7 @@ const ENGINE = (() => {
         : "Updates the second they move. Go and do something else.";
     } else {
       $("turnName").textContent = st.players[st.turn];
-      $("turnSub").textContent = (st.lo + 2 === st.hi
-        ? `Only ${st.lo + 1} is left. We both know how this ends.`
-        : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`);
+      $("turnSub").textContent = turnLine;
     }
 
     const liveEl = $("liveCount");
@@ -1434,7 +1591,16 @@ const ENGINE = (() => {
       pips.append(s);
     });
 
-    $("guessBlock").hidden = S.online && !mine;
+    // The wheel is visible to the whole room; only the player who is up can pull it.
+    if (!S.spinning){
+      $("spinner").dataset.spin = spun ? st.spin : "idle";
+      $("spinWord").textContent = spun ? SPIN_LABEL[st.spin] : "LUCKY SPIN";
+      $("spinNote").textContent = spinNote(st, yours);
+      $("spinBtn").hidden = spun || !yours;
+    }
+    $("guessBlock").hidden = !yours || !spun || st.spin === "skip";
+    $("sayBlock").hidden = !yours || !spun;
+    $("skipBtn").hidden = !yours || st.spin !== "skip";
     $("nudgeBtn").hidden = !(S.online && !mine);
     if (S.tauntTurn !== st.history.length && !$("sayIt").value){
       S.tauntTurn = st.history.length;
@@ -1560,7 +1726,7 @@ const ENGINE = (() => {
     S.showingOver = false;
     renderPlay();
     show("Play");
-    if (isMyTurn()){ promptMyTurn(); $("guess").focus(); }
+    if (isMyTurn()){ promptMyTurn(); focusTurn(); }
     else flashTitle(false);
   }
 
@@ -1806,7 +1972,7 @@ const ENGINE = (() => {
     localBomb.reset();
     $("sayIt").value = "";
     err("playErr", "");
-    renderPlay(); show("Play"); $("guess").focus();
+    renderPlay(); show("Play"); focusTurn();
   }
 
   /**
@@ -1856,6 +2022,105 @@ const ENGINE = (() => {
   }
 
   // ---------- turns ---------------------------------------------------------
+
+  /** The reel. Cosmetic only — the outcome is already decided before it runs. */
+  function reel(){
+    if (calm) return Promise.resolve();
+    const words = ENGINE.SPINS.map(k => SPIN_LABEL[k]);
+    return new Promise(resolve => {
+      const box = $("spinner"), word = $("spinWord");
+      box.dataset.spin = "rolling";
+      let i = 0, wait = 45;
+      (function step(){
+        word.textContent = words[i % words.length];
+        i++;
+        if (i < 12){ wait += 9; setTimeout(step, wait); } else resolve();
+      })();
+    });
+  }
+
+  async function doSpin(){
+    const st = S.state;
+    if (S.spinning || !st || st.over || st.spin !== "") return;
+    if (S.online && !isMyTurn()) return err("playErr", "It's not your turn yet.");
+    err("playErr", "");
+    // Drawn here, on the phone that is up. Rules can check a write but never
+    // compute one, so the spin cannot be adjudicated server-side.
+    const outcome = ENGINE.randomSpin();
+    S.spinning = true;
+    $("spinBtn").disabled = true;
+    try {
+      await reel();
+      const next = ENGINE.applySpin(st, outcome);
+      if (S.online){
+        await S.db.doc("rooms/" + S.code).update({
+          spin: next.spin, left: next.left, updatedAt: Date.now()
+        });
+      } else {
+        S.state = next;
+      }
+    } catch (e){
+      err("playErr", S.online ? dbMessage(e) : (e.message || "That spin didn't take."));
+    } finally {
+      S.spinning = false;
+      $("spinBtn").disabled = false;
+      renderPlay();
+      focusTurn();
+    }
+  }
+
+  /** A skipped turn still writes a line to the log, so the room can see why. */
+  async function passSkip(){
+    const st = S.state;
+    if (!st || st.over || st.spin !== "skip") return;
+    if (S.online && !isMyTurn()) return err("playErr", "It's not your turn yet.");
+    err("playErr", "");
+    const who = st.players[st.turn];
+    const next = ENGINE.endSkip(st, $("sayIt").value);
+    $("sayIt").value = "";
+
+    if (S.online){
+      $("skipBtn").disabled = true;
+      try {
+        await S.db.doc("rooms/" + S.code).update({
+          turn: next.turn, history: next.history, spin: "", left: 0, updatedAt: Date.now()
+        });
+      } catch (e){
+        err("playErr", dbMessage(e));
+      } finally { $("skipBtn").disabled = false; }
+      return;
+    }
+
+    S.state = next;
+    renderPlay();
+    if (S.localMode === "relay"){
+      relayHandoff(next, `${who} spun SKIP THIS TURN`, "sk", "No guess — the range is untouched");
+    } else {
+      const deck = $("screenPlay");
+      if (!calm){ deck.classList.remove("pop"); void deck.offsetWidth; deck.classList.add("pop"); }
+      focusTurn();
+    }
+  }
+
+  /** The relay screen: what just happened, and how the turn travels onward. */
+  function relayHandoff(next, who, cls, verdict){
+    const v = $("relayVerdict");
+    $("relayWho").textContent = who;
+    v.className = "verdict " + cls;
+    v.textContent = verdict;
+    const left = ENGINE.remaining(next);
+    $("relayRange").textContent = `Live range is now ${next.lo} – ${next.hi}, ${left} number${left === 1 ? "" : "s"} left. Next up: ${next.players[next.turn]}.`;
+    const linkable = canLinkShare();
+    $("relayCodeWrap").hidden = linkable;
+    $("relayCopy").textContent = linkable ? "Copy link" : "Copy code";
+    delete $("relayCopy").dataset.restore;
+    $("relayHow").textContent = linkable
+      ? "The link carries the live range and the bomb. Send it to the group and let the next player tap it."
+      : "This page can't hand out its own address, so the turn travels as a code. The next player pastes it into “Joining a game already running?” on the setup screen.";
+    if (!linkable) $("relayCode").value = turnCode();
+    show("Relay");
+  }
+
   async function submitGuess(){
     const check = ENGINE.validateGuess(S.state, $("guess").value);
     if (!check.ok){
@@ -1869,6 +2134,8 @@ const ENGINE = (() => {
     const before = { name: S.state.players[S.state.turn], guess: check.value };
     const said = $("sayIt").value;
     const next = ENGINE.applyGuess(S.state, check.value, said);
+    // Double Trouble keeps the turn on this phone for one more guess.
+    const advanced = next.turn !== S.state.turn;
     $("guess").value = "";
     $("sayIt").value = "";
 
@@ -1877,6 +2144,7 @@ const ENGINE = (() => {
       try {
         await S.db.doc("rooms/" + S.code).update({
           lo: next.lo, hi: next.hi, turn: next.turn, history: next.history,
+          spin: next.spin, left: next.left,
           over: next.over, loser: next.loser, updatedAt: Date.now()
         });
         // The snapshot drives every device, this one included.
@@ -1890,27 +2158,15 @@ const ENGINE = (() => {
     if (next.over){ endGame(); return; }
     renderPlay();
 
-    if (S.localMode === "relay"){
+    if (S.localMode === "relay" && advanced){
       const last = next.history[next.history.length - 1];
-      const v = $("relayVerdict");
-      $("relayWho").textContent = `${before.name} guessed ${before.guess}`;
-      if (last.side === "low"){ v.className = "verdict up"; v.textContent = "Too low — the floor moves up"; }
-      else { v.className = "verdict dn"; v.textContent = "Too high — the ceiling comes down"; }
-      const left = ENGINE.remaining(next);
-      $("relayRange").textContent = `Live range is now ${next.lo} – ${next.hi}, ${left} number${left === 1 ? "" : "s"} left. Next up: ${next.players[next.turn]}.`;
-      const linkable = canLinkShare();
-      $("relayCodeWrap").hidden = linkable;
-      $("relayCopy").textContent = linkable ? "Copy link" : "Copy code";
-      delete $("relayCopy").dataset.restore;
-      $("relayHow").textContent = linkable
-        ? "The link carries the live range and the bomb. Send it to the group and let the next player tap it."
-        : "This page can't hand out its own address, so the turn travels as a code. The next player pastes it into “Joining a game already running?” on the setup screen.";
-      if (!linkable) $("relayCode").value = turnCode();
-      show("Relay");
+      relayHandoff(next, `${before.name} guessed ${before.guess}`,
+        last.side === "low" ? "up" : "dn",
+        last.side === "low" ? "Too low — the floor moves up" : "Too high — the ceiling comes down");
     } else {
       const deck = $("screenPlay");
       if (!calm){ deck.classList.remove("pop"); void deck.offsetWidth; deck.classList.add("pop"); }
-      $("guess").focus();
+      focusTurn();
     }
   }
 
@@ -1922,7 +2178,7 @@ const ENGINE = (() => {
       try {
         await S.db.doc("rooms/" + S.code).update({
           lo: next.lo, hi: next.hi, bomb: ENGINE.hideNumber(secret),
-          turn: next.turn, history: [], over: false, loser: null, updatedAt: Date.now()
+          turn: next.turn, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: Date.now()
         });
         S.showingOver = false;
       } catch (e){ err("playErr", dbMessage(e)); }
@@ -1931,7 +2187,7 @@ const ENGINE = (() => {
     S.state = ENGINE.rematch(S.state, ENGINE.randomSecret(S.state.lo0, S.state.hi0));
     S.showingOver = false;
     err("playErr", "");
-    renderPlay(); show("Play"); $("guess").focus();
+    renderPlay(); show("Play"); focusTurn();
   }
 
   // ---------- resume a relay link ------------------------------------------
@@ -1941,7 +2197,7 @@ const ENGINE = (() => {
     S.localMode = incoming.mode === "relay" ? "relay" : "pass";
     S.showingOver = false;
     err("playErr", "");
-    if (incoming.over) endGame(); else { renderPlay(); show("Play"); $("guess").focus(); }
+    if (incoming.over) endGame(); else { renderPlay(); show("Play"); focusTurn(); }
     return true;
   }
   function resumeFromLink(){
@@ -2015,7 +2271,7 @@ const ENGINE = (() => {
         v: ENGINE.VERSION, code, phase: "lobby", hostId: seatId, mode: "online",
         lo0: cfg.lo, hi0: cfg.hi, lo: cfg.lo, hi: cfg.hi,
         bomb: ENGINE.hideNumber(cfg.secret), penalty: cfg.penalty,
-        players: [], seats: [], turn: 0, history: [], over: false, loser: null,
+        players: [], seats: [], turn: 0, spin: "", left: 0, history: [], over: false, loser: null,
         createdAt: Date.now(), updatedAt: Date.now()
       });
       // Whoever typed the number knows where the bomb is, so they referee
@@ -2072,7 +2328,7 @@ const ENGINE = (() => {
         phase: "playing",
         seats: S.seats.map(s => s.id),
         players: S.seats.map(s => s.name),
-        turn: 0, history: [], over: false, loser: null, updatedAt: Date.now()
+        turn: 0, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: Date.now()
       });
       err("lobbyErr", "");
     } catch (e){ err("lobbyErr", dbMessage(e)); $("startBtn").disabled = false; }
@@ -2108,9 +2364,14 @@ const ENGINE = (() => {
   $("resumeCode").addEventListener("keydown", e => { if (e.key === "Enter") $("resumeBtn").click(); });
   $("resumeCode").addEventListener("input", () => err("resumeErr", ""));
 
+  $("spinBtn").addEventListener("click", doSpin);
+  $("skipBtn").addEventListener("click", passSkip);
   $("guessBtn").addEventListener("click", submitGuess);
   $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
-  $("sayIt").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
+  $("sayIt").addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    if (S.state && S.state.spin === "skip") passSkip(); else submitGuess();
+  });
   $("guess").addEventListener("input", () => { err("playErr", ""); renderOdds(); });
   $("abandon").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });
 
