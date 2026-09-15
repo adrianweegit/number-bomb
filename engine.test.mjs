@@ -320,3 +320,11 @@ test("a message cannot smuggle markup into the log", () => {
   assert.equal(s.history.at(-1).m, evil);
   assert.equal(ENGINE.decodeState(ENGINE.encodeState(s)).history.at(-1).m, evil);
 });
+
+// --- the number the odds preview is built from ------------------------------
+test("remaining() is hi minus lo minus one at the edge", () => {
+  // The preview says "1 in N" and switches to "One number left" off this
+  // count. Computing it from hi - lo instead would fire both a turn late.
+  assert.equal(ENGINE.remaining({ lo: 30, hi: 32 }), 1, "30–32 leaves only 31");
+  assert.equal(ENGINE.remaining({ lo: 30, hi: 31 }), 0, "adjacent bounds leave nothing");
+});
