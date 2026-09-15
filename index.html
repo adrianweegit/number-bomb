@@ -275,6 +275,14 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 .log .mv.up{color:var(--safe)}
 .log .mv.dn{color:var(--fuse)}
 .log .mv.bx{color:var(--accent);font-weight:700}
+.log .msg{
+  grid-column:2 / -1;margin-top:4px;
+  font:400 13px/1.4 "Archivo",system-ui,sans-serif;
+  color:var(--muted);overflow-wrap:anywhere;
+}
+/* Quotes as pseudo-elements so the text itself stays plain textContent. */
+.log .msg::before{content:"\201C"}
+.log .msg::after{content:"\201D"}
 .log-empty{margin:0;color:var(--muted);font-size:13.5px}
 
 /* ---------- relay handoff ---------- */
@@ -633,6 +641,8 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
         <input type="number" id="guess" inputmode="numeric" autocomplete="off" placeholder="&mdash;">
         <button class="btn btn--primary" id="guessBtn" type="button">Guess</button>
       </div>
+      <input type="text" id="sayIt" maxlength="80" autocomplete="off" style="margin-top:9px"
+             placeholder="Say something (optional)" aria-label="Optional message with your guess">
     </div>
     <button class="btn btn--wa btn--wide" id="nudgeBtn" type="button" hidden>Nudge them on WhatsApp</button>
     <p class="err" id="playErr" hidden></p>
@@ -698,6 +708,10 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 const ENGINE = (() => {
   const VERSION = 2;
   const MAX_PLAYERS = 10;
+  // A line of chat rides along with a move. Bounded because it lands in a
+  // document everyone in the room can read, and Firestore caps a document
+  // at 1 MiB — unbounded text from one player could wreck a room.
+  const MAX_MESSAGE = 80;
   const KEY = "pathfinder-number-bomb-v1";
   const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
   const MODES = ["pass", "relay", "online"];
@@ -758,11 +772,15 @@ const ENGINE = (() => {
   }
 
   /** Returns a new state. Turn advances only on a legal, non-fatal guess. */
-  function applyGuess(state, guess){
+  /** `message` is optional; an empty one leaves no field on the move at all. */
+  function applyGuess(state, guess, message){
     const check = validateGuess(state, guess);
     if (!check.ok) throw new Error(check.reason);
     const g = check.value;
-    const next = { ...state, history: state.history.concat([{ p: state.turn, g, side: "" }]) };
+    const said = typeof message === "string" ? message.trim().slice(0, MAX_MESSAGE) : "";
+    const move = { p: state.turn, g, side: "" };
+    if (said) move.m = said;
+    const next = { ...state, history: state.history.concat([move]) };
     const entry = next.history[next.history.length - 1];
 
     if (g === state.secret){
@@ -856,7 +874,9 @@ const ENGINE = (() => {
     if (!Array.isArray(s.history)) return false;
     return s.history.every(e =>
       e && typeof e === "object" && int(e.p) && e.p >= 0 && e.p < s.players.length &&
-      int(e.g) && ["low", "high", "boom"].includes(e.side));
+      int(e.g) && ["low", "high", "boom"].includes(e.side) &&
+      (e.m === undefined ||
+        (typeof e.m === "string" && e.m.length > 0 && e.m.length <= MAX_MESSAGE)));
   }
 
   function encodeState(state){ return pack(JSON.stringify(state)); }
@@ -882,7 +902,7 @@ const ENGINE = (() => {
   }
 
   return {
-    VERSION, MAX_PLAYERS, MODES, PENALTIES, CODE_ALPHABET,
+    VERSION, MAX_PLAYERS, MAX_MESSAGE, MODES, PENALTIES, CODE_ALPHABET,
     remaining, createGame, validateGuess, applyGuess, rematch, randomSecret,
     newRoomCode, encodeState, decodeState, isValidState, toDoc, fromDoc,
     hideNumber, showNumber
@@ -1196,11 +1216,13 @@ const ENGINE = (() => {
   }
   function resultMessage(){
     const st = S.state, loser = st.players[st.loser], safe = st.history.length - 1;
+    const lastWords = (st.history[st.history.length - 1] || {}).m || "";
     return [
       `💥 *BOOM!* ${loser} triggered it.`, "",
       `The bomb was *${st.secret}*.`,
       `Survived ${safe} safe guess${safe === 1 ? "" : "es"}.`, "",
-      `${loser} ${st.penalty}. 😈`
+      `${loser} ${st.penalty}. 😈`,
+      ...(lastWords ? ["", `Last words: "${lastWords}"`] : [])
     ].join("\n");
   }
 
@@ -1255,6 +1277,13 @@ const ENGINE = (() => {
       else if (h.side === "low"){ mv.className = "mv up"; mv.textContent = `floor → ${h.g}`; }
       else { mv.className = "mv dn"; mv.textContent = `ceiling → ${h.g}`; }
       li.append(no, nm, mv);
+      if (typeof h.m === "string" && h.m){
+        const said = document.createElement("span");
+        said.className = "msg";
+        // textContent, never innerHTML: this is text other players wrote.
+        said.textContent = h.m;
+        li.append(said);
+      }
       host.append(li);
     });
   }
@@ -1380,6 +1409,7 @@ const ENGINE = (() => {
 
   function enterRoom(code, isHost){
     S.online = true; S.code = code; S.isHost = isHost;
+    $("sayIt").value = "";
     S.promptedFor = -1; S.showingOver = false;
     store.set("nb.room", code);
     stopSubs();
@@ -1647,6 +1677,7 @@ const ENGINE = (() => {
     } catch (e){ return err("setupErr", e.message); }
     S.online = false; S.showingOver = false;
     localBomb.reset();
+    $("sayIt").value = "";
     err("playErr", "");
     renderPlay(); show("Play"); $("guess").focus();
   }
@@ -1663,8 +1694,10 @@ const ENGINE = (() => {
     err("playErr", "");
 
     const before = { name: S.state.players[S.state.turn], guess: check.value };
-    const next = ENGINE.applyGuess(S.state, check.value);
+    const said = $("sayIt").value;
+    const next = ENGINE.applyGuess(S.state, check.value, said);
     $("guess").value = "";
+    $("sayIt").value = "";
 
     if (S.online){
       $("guessBtn").disabled = true;
@@ -1904,6 +1937,7 @@ const ENGINE = (() => {
 
   $("guessBtn").addEventListener("click", submitGuess);
   $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
+  $("sayIt").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
   $("guess").addEventListener("input", () => err("playErr", ""));
   $("abandon").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });
 

@@ -29,6 +29,8 @@ moment someone plays.
   where the bomb is. Tap **Random** instead and nobody knows it, host included,
   so everyone at the table plays.
 - Only the player whose turn it is gets a guess box.
+- **Say something with your guess.** One optional line, capped at 80
+  characters, shown under your name in the cut log. Trash talk is the point.
 - When it becomes your turn the page prompts you — a buzz, a chime, and a
   browser notification if you allowed one.
 - **Install it to your Home Screen** and it opens like an app, badges its icon
@@ -120,13 +122,13 @@ npm run test:engine   # rules of the game — no network, no dependencies
 npm run test:rules    # security rules, against the Firestore emulator (needs Java)
 ```
 
-**28 engine tests.** The important one walks every game to completion using the
+**34 engine tests.** The important one walks every game to completion using the
 slowest legal strategy and asserts it always detonates — never a deadlock,
 never a state with no legal move. The rest cover the trust boundary: a turn code
 or room document is data from someone else's phone, so a tampered or truncated
 one is discarded outright rather than half-loaded into an unplayable game.
 
-**22 security-rule tests.** These guard a database anyone with the link can
+**25 security-rule tests.** These guard a database anyone with the link can
 reach, so they run on every push. Verified refused, for a client writing
 straight to Firestore with the page's own credentials and no interface in the
 way: moving out of turn, guessing outside or on the bounds, shifting the wrong

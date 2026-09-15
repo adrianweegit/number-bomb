@@ -271,3 +271,44 @@ test("a long game still evaluates — the rules stay inside the expression budge
   });
   await assertFails(db(seats[(turn + 1) % 2]).doc(`rooms/${ROOM}`).update(good), "out of turn, at depth");
 });
+
+// --- the optional message ---------------------------------------------------
+// Chat rides inside the move, so the rules are what stop one player writing a
+// novel into a document the whole room has to download on every turn.
+
+test("a move may carry a short message", async () => {
+  await seed(playing());
+  await assertSucceeds(db("alice").doc(`rooms/${ROOM}`).update({
+    lo: 30, hi: 100, turn: 1,
+    history: [{ p: 0, g: 30, side: "low", m: "no way it's this low" }]
+  }));
+});
+
+test("an oversized or malformed message is refused", async () => {
+  const move = m => ({ lo: 30, hi: 100, turn: 1, history: [{ p: 0, g: 30, side: "low", m }] });
+  for (const [label, m] of [
+    ["81 characters", "x".repeat(81)],
+    ["a kilobyte",    "x".repeat(1024)],
+    ["empty string",  ""],
+    ["a number",      42],
+    ["a list",        ["a"]],
+    ["a map",         { a: 1 }]
+  ]) {
+    await env.clearFirestore();
+    await seed(playing());
+    await assertFails(db("alice").doc(`rooms/${ROOM}`).update(move(m)), label);
+  }
+  await env.clearFirestore();
+  await seed(playing());
+  await assertSucceeds(db("alice").doc(`rooms/${ROOM}`).update(move("x".repeat(80))), "80 is the cap");
+});
+
+test("a message cannot be slipped onto someone else's move", async () => {
+  await seed(playing({ lo: 30, turn: 1, history: [{ p: 0, g: 30, side: "low" }] }));
+  // Bob is up; he must not edit Adrian's earlier move while appending his own.
+  await assertFails(db("bob").doc(`rooms/${ROOM}`).update({
+    lo: 30, hi: 71, turn: 2,
+    history: [{ p: 0, g: 30, side: "low", m: "adrian is a coward" },
+              { p: 1, g: 71, side: "high" }]
+  }));
+});

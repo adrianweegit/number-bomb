@@ -266,3 +266,57 @@ test("a rematch in a room keeps the crew and re-arms a fresh bomb", () => {
   assert.equal(back.turn, 2);
   assert.equal(back.history.length, 0);
 });
+
+// --- a line of chat with the move -------------------------------------------
+// The message travels inside the move, so it crosses every boundary the move
+// already crosses: the shared room document and the pasteable turn codes.
+
+test("a guess can carry a message, and usually does not", () => {
+  let s = ENGINE.applyGuess(game(), 30, "no way it's this low");
+  assert.equal(s.history.at(-1).m, "no way it's this low");
+  s = ENGINE.applyGuess(s, 71);
+  assert.equal("m" in s.history.at(-1), false, "a quiet move carries no field at all");
+});
+
+test("blank and whitespace-only messages leave no field behind", () => {
+  for (const blank of ["", "   ", "\n\t ", null, undefined, 42, {}]) {
+    const s = ENGINE.applyGuess(game(), 30, blank);
+    assert.equal("m" in s.history.at(-1), false, JSON.stringify(blank));
+  }
+});
+
+test("a message is trimmed and capped rather than rejected", () => {
+  const s = ENGINE.applyGuess(game(), 30, "   padded out   ");
+  assert.equal(s.history.at(-1).m, "padded out");
+  const long = ENGINE.applyGuess(game(), 30, "x".repeat(500));
+  assert.equal(long.history.at(-1).m.length, ENGINE.MAX_MESSAGE);
+});
+
+test("an oversized or malformed message in a shared game is refused", () => {
+  const base = ENGINE.applyGuess(game(), 30, "fine");
+  assert.ok(ENGINE.decodeState(ENGINE.encodeState(base)), "an honest one survives");
+  const bad = m => {
+    const s = { ...base, history: [{ p: 0, g: 30, side: "low", m }] };
+    return ENGINE.decodeState(ENGINE.encodeState(s));
+  };
+  assert.equal(bad("x".repeat(ENGINE.MAX_MESSAGE + 1)), null, "over the cap");
+  assert.equal(bad(""), null, "empty string should never be stored");
+  assert.equal(bad(12345), null, "not a string");
+  assert.equal(bad({ toString: () => "x" }), null, "not a string");
+});
+
+test("messages survive a turn code round trip", () => {
+  let s = ENGINE.applyGuess(game({ players: ["Adrian", "Umbrella"] }), 30, "over to you 😈");
+  s = ENGINE.applyGuess(s, 71, "rude");
+  const back = ENGINE.decodeState(ENGINE.encodeState(s));
+  assert.deepEqual(back.history.map(e => e.m), ["over to you 😈", "rude"]);
+});
+
+test("a message cannot smuggle markup into the log", () => {
+  // The log renders with textContent, so this must survive as literal text
+  // rather than being sanitised away — losing it silently would hide a bug.
+  const evil = '<img src=x onerror="alert(1)">';
+  const s = ENGINE.applyGuess(game(), 30, evil);
+  assert.equal(s.history.at(-1).m, evil);
+  assert.equal(ENGINE.decodeState(ENGINE.encodeState(s)).history.at(-1).m, evil);
+});

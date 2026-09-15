@@ -97,6 +97,9 @@ service cloud.firestore {
           && e.g is int
           // bounds are exclusive, which is what makes the range always shrink
           && e.g > p.lo && e.g < p.hi
+          // an optional line of chat rides with the move; bounded because it
+          // lands in a document the whole room reads
+          && (!('m' in e) || (e.m is string && e.m.size() > 0 && e.m.size() <= 80))
           && (
                // too low: the floor rises to the guess
                (e.side == 'low' && n.lo == e.g && n.hi == p.hi
