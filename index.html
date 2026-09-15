@@ -642,7 +642,7 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
         <button class="btn btn--primary" id="guessBtn" type="button">Guess</button>
       </div>
       <input type="text" id="sayIt" maxlength="80" autocomplete="off" style="margin-top:9px"
-             placeholder="Say something (optional)" aria-label="Optional message with your guess">
+             placeholder="Trash talk (optional)" aria-label="Optional message with your guess">
     </div>
     <button class="btn btn--wa btn--wide" id="nudgeBtn" type="button" hidden>Nudge them on WhatsApp</button>
     <p class="err" id="playErr" hidden></p>
@@ -941,6 +941,7 @@ const ENGINE = (() => {
     localMode: "pass", promptedFor: -1, showingOver: false,
     backend: null, bootError: "",
     seenHistory: 0, wasHidden: false, installEvent: null,
+    lastTaunt: "", tauntTurn: -1,
     randomArmed: { host: false, local: false }
   };
 
@@ -1337,6 +1338,11 @@ const ENGINE = (() => {
 
     $("guessBlock").hidden = S.online && !mine;
     $("nudgeBtn").hidden = !(S.online && !mine);
+    if (S.tauntTurn !== st.history.length && !$("sayIt").value){
+      S.tauntTurn = st.history.length;
+      $("sayIt").placeholder = pickTaunt();
+    }
+
     $("guess").min = st.lo + 1;
     $("guess").max = st.hi - 1;
     $("guess").placeholder = `${st.lo + 1}–${st.hi - 1}`;
@@ -1552,6 +1558,26 @@ const ENGINE = (() => {
 
   // ---------- local (pass the phone) ---------------------------------------
   const DEFAULT_NAMES = ["Adrian", "Mei", "Raj"];
+
+  // A fresh prompt each turn. Cosmetic, but it is a party game and the same
+  // grey sentence forty times running is not much of an invitation.
+  const TAUNTS = [
+    "Trash talk (optional)",
+    "Any last words?",
+    "Talk your trash…",
+    "Say something you'll regret",
+    "Psych out the next player",
+    "Care to gloat?",
+    "Optional smack talk",
+    "Blame someone, it's free",
+    "Sound confident. Nobody checks."
+  ];
+  function pickTaunt(){
+    let t = TAUNTS[Math.floor(Math.random() * TAUNTS.length)];
+    if (t === S.lastTaunt && TAUNTS.length > 1) t = TAUNTS[(TAUNTS.indexOf(t) + 1) % TAUNTS.length];
+    S.lastTaunt = t;
+    return t;
+  }
 
   function renderRoster(names){
     const host = $("roster");

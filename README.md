@@ -29,8 +29,9 @@ moment someone plays.
   where the bomb is. Tap **Random** instead and nobody knows it, host included,
   so everyone at the table plays.
 - Only the player whose turn it is gets a guess box.
-- **Say something with your guess.** One optional line, capped at 80
-  characters, shown under your name in the cut log. Trash talk is the point.
+- **Trash talk with your guess.** One optional line, capped at 80 characters,
+  shown under your name in the cut log. The box asks for it differently every
+  turn.
 - When it becomes your turn the page prompts you — a buzz, a chime, and a
   browser notification if you allowed one.
 - **Install it to your Home Screen** and it opens like an app, badges its icon
