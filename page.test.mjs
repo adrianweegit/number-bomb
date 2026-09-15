@@ -27,3 +27,23 @@ test("og.png exists and is under 300 KB", () => {
   assert.ok(bytes > 0, "og.png must not be empty");
   assert.ok(bytes < 300 * 1024, `og.png is ${(bytes / 1024).toFixed(0)} KB, over the 300 KB budget`);
 });
+
+// --- share text -------------------------------------------------------------
+// The builders live in the app layer, so they are extracted the same way
+// engine.test.mjs extracts the engine: by marker. Building them here with the
+// longest legal inputs is what stops a copy edit quietly pushing a share past
+// what a chat app will show.
+const shareSrc = html.split("// ===== SHARE TEXT START =====")[1]
+                     .split("// ===== SHARE TEXT END =====")[0];
+const SHARE = new Function(`${shareSrc}\nreturn { inviteText };`)();
+
+test("invite text stays under 320 characters with a 120-character forfeit", () => {
+  const text = SHARE.inviteText(
+    "4F2K",
+    "x".repeat(120),                                   // the rules cap penalty at 120
+    "https://adrianweegit.github.io/number-bomb/"      // the live origin
+  );
+  assert.ok(text.length < 320, `invite text is ${text.length} characters`);
+  assert.match(text, /room 4F2K/, "the code belongs in the text");
+  assert.match(text, /\?r=4F2K$/, "the link must carry the room code");
+});
