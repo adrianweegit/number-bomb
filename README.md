@@ -198,6 +198,13 @@ The rules of the game live in one marked block inside `index.html` so the page
 stays a single shareable file, and the test suite extracts that block rather
 than duplicating it.
 
+## Handing this to a reviewer
+
+[HANDOFF.md](HANDOFF.md) is a complete technical brief — architecture, data
+model, security rules, deployment, tests, decisions already made and why, and a
+template for proposing enhancements. Written for someone who has never seen the
+code.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
