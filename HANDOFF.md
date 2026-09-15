@@ -33,6 +33,13 @@ guesses are 31–54. Guessing a bound is refused and does **not** cost your turn
 - guess > bomb → the guess becomes the new ceiling
 - guess == bomb → detonation, game over
 
+Since v3 every turn opens with a **lucky spin**, drawn on the phone that is up:
+`normal` (50%) buys one guess, `double` (25%) buys two taken back to back with
+no second spin, `skip` (25%) buys none and hands the turn straight on. A skip is
+written to the log as `{ p, side: "skip" }` with no `g`. None of this touches the
+invariant below — the range only ever moves on a guess, and the bomb still sits
+strictly inside it — but a turn can now produce zero guesses or two.
+
 This exclusivity is load-bearing. Because the bomb always sits strictly between
 floor and ceiling, a legal guess always exists **and** the range loses at least
 one number per turn, so the game cannot deadlock and must terminate. A bomb
@@ -144,17 +151,19 @@ evaluates the block. Renaming or removing them breaks the test suite.
 ### Exports
 
 ```
-VERSION (2)  MAX_PLAYERS (10)  MAX_MESSAGE (80)  MODES  PENALTIES  CODE_ALPHABET
+VERSION (3)  MAX_PLAYERS (10)  MAX_MESSAGE (80)  MODES  PENALTIES  CODE_ALPHABET
+SPINS  SPIN_ODDS  SPIN_GUESSES
 remaining()      createGame()   validateGuess()  applyGuess()  rematch()
 randomSecret()   newRoomCode()  encodeState()    decodeState() isValidState()
 toDoc()          fromDoc()      hideNumber()     showNumber()
+randomSpin()     applySpin()    endSkip()
 ```
 
 ### Playable state shape
 
 ```js
 {
-  v: 2,
+  v: 3,
   players: ["Adrian", "Umbrella"],   // display names, index = turn order
   lo0: 1, hi0: 100,                  // the range as opened; immutable
   lo: 38, hi: 71,                    // the live range
@@ -162,15 +171,22 @@ toDoc()          fromDoc()      hideNumber()     showNumber()
   penalty: "eats the last piece on the dish",
   mode: "pass" | "relay" | "online",
   turn: 0,                           // index into players
-  history: [ { p, g, side, m? } ],   // append-only
+  spin: "" | "normal" | "double" | "skip",  // this turn's wheel; "" = not spun
+  left: 0,                           // guesses this turn still owes
+  history: [ { p, g?, side, m? } ],  // append-only
   over: false,
   loser: null                        // index into players once over
 }
 ```
 
-A history entry: `p` player index, `g` the guess, `side` one of
-`"low" | "high" | "boom"`, `m` an optional message (≤ 80 chars, absent when
-empty).
+A history entry: `p` player index, `g` the guess (absent on a skip), `side` one
+of `"low" | "high" | "boom" | "skip"`, `m` an optional message (≤ 80 chars,
+absent when empty).
+
+`spin` and `left` must agree, and `isValidState()` enforces it: `""` and
+`"skip"` owe 0, `"normal"` owes 1, `"double"` owes 2 then 1. A finished game
+carries `spin: ""`, `left: 0`. Guessing is refused until `left > 0`, which is
+what stops a tampered state minting extra guesses.
 
 Online rooms carry extra fields alongside: `code`, `hostId`, `phase`, `seats`.
 `isValidState()` ignores unknown fields, so transports can add their own.
@@ -205,7 +221,7 @@ times.
 
 ```js
 {
-  v: 2,
+  v: 3,
   code: "4F2K",
   phase: "lobby" | "playing",
   hostId: "<uid of whoever opened it>",
@@ -216,7 +232,7 @@ times.
   penalty: "<≤120 chars>",
   players: ["Adrian", ...],  // frozen at start, parallel to seats
   seats: ["<uid>", ...],     // frozen at start; index = turn order
-  turn, history, over, loser,
+  turn, spin, left, history, over, loser,
   createdAt, updatedAt
 }
 ```
@@ -240,12 +256,35 @@ race** — each player writes only their own document.
 3. Players join by writing their seat.
 4. Host starts: freezes `seats` and `players` from the seat list, sets
    `phase: "playing"`.
-5. Each turn is **one `update()`** to the room document by the player whose turn
-   it is: `lo/hi`, `turn`, `history`, `over`, `loser`, `updatedAt`.
-6. Detonation sets `over: true` and `loser`.
-7. Host may rematch: new `bomb`, empty `history`, same `seats`/`players`.
+5. Each turn opens with a **spin**: one `update()` of `spin`, `left` and
+   `updatedAt` by the player whose turn it is, touching nothing else.
+6. Then, depending on the wheel:
+   - **skip** — one `update()` of `turn`, `history` (a `side: "skip"` entry),
+     `spin: ""`, `left: 0`. The range does not move.
+   - **normal / double** — one `update()` per guess: `lo/hi`, `turn`, `history`,
+     `spin`, `left`, `over`, `loser`, `updatedAt`. On the first of a double the
+     turn does **not** advance and `left` drops to 1; the second releases it.
+7. Detonation sets `over: true` and `loser`, and clears `spin`/`left` — a second
+   guess owed by Double Trouble is written off.
+8. Host may rematch: new `bomb`, empty `history`, same `seats`/`players`, wheel
+   at rest.
 
 Each client holds **two** listeners: the room document and the seats collection.
+
+### Version
+
+`ENGINE.VERSION` is **3**. The lucky spin added `spin` and `left` to the room
+document and a fourth `side` to the log, so v2 and v3 are not interchangeable:
+
+- `isValidState()` refuses any state whose `v` is not 3, so a v2 room document
+  or turn code is discarded rather than half-loaded. The page says the room
+  "didn't read cleanly".
+- The rules refuse to open, start, spin in, move in or rematch a v2 room at all,
+  so an old room cannot be driven by an old cached page either.
+
+**A room or share link created before v3 shipped is dead and has to be started
+again.** That was a deliberate choice over letting a stale cached page
+misinterpret a game it does not understand.
 
 ---
 
@@ -290,6 +329,13 @@ credentials**, bypassing the interface entirely:
 - starting or dealing a rematch without being the host
 - deleting someone else's room, taking someone else's seat
 - a message over 80 characters, empty, or not a string
+- spinning out of turn, spinning twice in a turn, or spinning after detonation
+- claiming more guesses than the outcome allows (`normal` with 2, `double` with 3…)
+- moving the range, the log or the turn while pretending to spin
+- guessing with no spin on the wheel, or on a spin that said skip
+- claiming a skip without a skip on the wheel, or smuggling a number into one
+- stretching Double Trouble into a third guess, or leaving after only one
+- moving or spinning in a v2 room left running across the republish
 
 ### What they cannot do
 
@@ -298,6 +344,11 @@ guess, and rules can *validate* a write but never *compute* one. Server-side
 adjudication needs a Cloud Function, which needs the Blaze plan. The bomb is
 therefore stored scrambled and salted per room, which defeats a casual look at
 the database but not a determined player reading the page source.
+
+**They cannot draw the spin.** Same limitation. The outcome is drawn on the
+phone that is up and declared to the room; the rules check that the turn which
+follows is consistent with the declaration, never the draw itself. A modified
+client could spin Skip every turn.
 
 ### ⚠️ The expression budget — read before editing
 
@@ -314,6 +365,24 @@ The rules now bind their values once with `let` and compare fields inline.
 still evaluates at depth while a dishonest one is still refused on merit. Any
 rewrite that reintroduces helper-function-per-field style will pass the short
 tests and reintroduce the bug.
+
+The lucky spin hit this again, and it is worth knowing how. `isSpin()` was first
+written the obvious way — naming every field that must hold still, fourteen
+equality checks. Adding that fourth function pushed **every refused write in the
+suite**, even on an empty log, past the cap: the tests still passed, because
+`assertFails` does not care *why* a write was refused. It was caught only by
+counting the emulator's `maximum of 1000 expressions` warnings and comparing
+against `main`, which emits none.
+
+The fix was one expression instead of fourteen:
+
+```
+n.diff(p).affectedKeys().hasOnly(['spin', 'left', 'updatedAt'])
+```
+
+which is also *stricter* than the enumeration it replaced. **If you add a rule
+function, grep the emulator output for that warning — a green suite does not
+mean you stayed inside the budget.**
 
 ### ⚠️ Rules do not ship with the page
 
@@ -348,18 +417,24 @@ intercepted.
 ```bash
 npm install
 npm test               # both suites
-npm run test:engine    # 34 tests, no network, no deps
-npm run test:rules     # 25 tests, needs Java for the Firestore emulator
+npm run test:engine    # 53 tests, no network, no deps
+npm run test:rules     # 41 tests, needs Java for the Firestore emulator
 ```
 
 CI runs both on every push and pull request: Ubuntu, Node 22, Temurin JDK 21.
 
-**34 engine tests** cover the rules of the game and the trust boundary — a turn
+**53 engine tests** cover the rules of the game and the trust boundary — a turn
 code or room document is data from someone else's phone, so tampered,
 truncated, deadlocking, NaN-producing and markup-bearing inputs are all
-asserted to be rejected outright rather than half-loaded.
+asserted to be rejected outright rather than half-loaded. Since the lucky spin
+they also cover the wheel: the odds, the guess accounting, and a run of games
+played to detonation with random spins to prove skips and doubles cannot
+deadlock it.
 
-**25 rules tests** cover the list in §8, plus the expression-budget test.
+**41 rules tests** cover the list in §8, plus the expression-budget test and an
+integration test that plays a whole game through the emulator driving the
+engine extracted from `index.html` — the guard against the rules and the engine
+drifting apart.
 
 Neither suite touches the real Firebase project. The rules suite runs entirely
 against a local emulator with project id `demo-number-bomb`.

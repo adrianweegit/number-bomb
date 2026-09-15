@@ -1,6 +1,6 @@
 {
   "name": "number-bomb",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "private": true,
   "description": "A turn-based party game for a group chat. Guess inside a shrinking range; whoever hits the hidden number pays the forfeit.",
   "type": "module",

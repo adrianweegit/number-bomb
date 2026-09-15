@@ -13,6 +13,11 @@ rules_version = '2';
 // adjudicating a guess server-side needs Cloud Functions. The bomb is stored
 // scrambled, never as a plain number. See FIREBASE-SETUP.md, "Hardening".
 //
+// VERSION: the lucky spin changed the shape of a room, so v3 documents are the
+// only ones these rules will open or move. A v2 room left running across the
+// republish is frozen here and refused by the page's own decoder — it has to be
+// started again. See HANDOFF.md, "Version".
+//
 // COST: rules are capped at 1000 expression evaluations per request, and a
 // function call is re-evaluated at every use. Everything below binds its
 // values once with `let` and compares fields inline — a rewrite that
@@ -33,7 +38,9 @@ service cloud.firestore {
 
       allow update: if request.auth != null
         && resource != null
-        && (isStart() || isMove() || isRematch());
+        // isMove() first: it bails on a size check for every other shape,
+        // so the common case is also the cheapest to reject.
+        && (isMove() || isSpin() || isStart() || isRematch());
 
       allow delete: if request.auth != null
         && resource != null
@@ -41,7 +48,7 @@ service cloud.firestore {
 
       function newRoom(id) {
         let n = request.resource.data;
-        return n.v == 2
+        return n.v == 3
           && n.code == id
           && n.hostId == request.auth.uid
           && n.mode == 'online'
@@ -52,7 +59,8 @@ service cloud.firestore {
           && n.bomb is string && n.bomb.size() > 0 && n.bomb.size() <= 256
           && n.penalty is string && n.penalty.size() > 0 && n.penalty.size() <= 120
           && n.players.size() == 0 && n.seats.size() == 0
-          && n.turn == 0 && n.history.size() == 0
+          && n.turn == 0 && n.spin == '' && n.left == 0
+          && n.history.size() == 0
           && n.over == false && n.loser == null;
       }
 
@@ -60,7 +68,8 @@ service cloud.firestore {
       function isStart() {
         let p = resource.data;
         let n = request.resource.data;
-        return p.phase == 'lobby'
+        return p.v == 3
+          && p.phase == 'lobby'
           && p.hostId == request.auth.uid
           && n.phase == 'playing'
           && n.v == p.v && n.code == p.code && n.hostId == p.hostId
@@ -69,9 +78,37 @@ service cloud.firestore {
           && n.seats.size() >= 2 && n.seats.size() <= 10
           && n.players.size() == n.seats.size()
           && n.lo == p.lo0 && n.hi == p.hi0
-          && n.turn == 0
+          && n.turn == 0 && n.spin == '' && n.left == 0
           && n.history.size() == 0
           && n.over == false && n.loser == null;
+      }
+
+      // --- the lucky spin: the player who is up records what the wheel said --
+      //
+      // Rules can validate a write but never compute one, so the outcome is
+      // drawn on the client and only checked for shape here: exactly one of the
+      // three outcomes, with the matching number of guesses owed, and nothing
+      // else in the room allowed to move. A modified client could pick its own
+      // outcome — the same class of trust as the bomb itself.
+      function isSpin() {
+        let p = resource.data;
+        let n = request.resource.data;
+        return p.v == 3
+          && p.phase == 'playing'
+          && p.over == false
+          && p.seats.size() > 1
+          && p.seats[p.turn] == request.auth.uid
+          && p.spin == '' && p.left == 0
+          // One check instead of naming every field that must hold still: a
+          // spin may touch the wheel and the clock, and nothing else in the
+          // room. Enumerating them costs enough evaluations to push honest
+          // writes over the 1000-expression cap noted at the top of this file.
+          && n.diff(p).affectedKeys().hasOnly(['spin', 'left', 'updatedAt'])
+          && (
+               (n.spin == 'normal' && n.left == 1)
+               || (n.spin == 'double' && n.left == 2)
+               || (n.spin == 'skip' && n.left == 0)
+             );
       }
 
       // --- a turn: only the player the room says is up ---------------------
@@ -81,7 +118,10 @@ service cloud.firestore {
         let i = p.history.size();
         let e = n.history[i];
         let up = (p.turn + 1) % p.seats.size();
-        return p.phase == 'playing'
+        // Double Trouble owes two guesses; only the last one moves the turn on.
+        let last = p.left <= 1;
+        return p.v == 3
+          && p.phase == 'playing'
           && p.over == false
           && p.seats.size() > 1
           && p.seats[p.turn] == request.auth.uid
@@ -94,24 +134,41 @@ service cloud.firestore {
           && n.history.size() == i + 1
           && n.history == p.history.concat([e])
           && e.p == p.turn
-          && e.g is int
-          // bounds are exclusive, which is what makes the range always shrink
-          && e.g > p.lo && e.g < p.hi
           // an optional line of chat rides with the move; bounded because it
           // lands in a document the whole room reads
           && (!('m' in e) || (e.m is string && e.m.size() > 0 && e.m.size() <= 80))
           && (
-               // too low: the floor rises to the guess
-               (e.side == 'low' && n.lo == e.g && n.hi == p.hi
-                 && n.over == false && n.loser == null && n.turn == up)
+               // a skipped turn: the wheel said skip, so no number is guessed
+               // and the range is left exactly where it was
+               (e.side == 'skip' && p.spin == 'skip' && !('g' in e)
+                 && n.lo == p.lo && n.hi == p.hi
+                 && n.over == false && n.loser == null
+                 && n.turn == up && n.spin == '' && n.left == 0)
                ||
-               // too high: the ceiling drops to the guess
-               (e.side == 'high' && n.hi == e.g && n.lo == p.lo
-                 && n.over == false && n.loser == null && n.turn == up)
-               ||
-               // detonation: bounds freeze, the guesser is pinned as loser
-               (e.side == 'boom' && n.over == true && n.loser == p.turn
-                 && n.lo == p.lo && n.hi == p.hi && n.turn == p.turn)
+               (e.g is int
+                 // bounds are exclusive, which is what makes the range shrink
+                 && e.g > p.lo && e.g < p.hi
+                 // you cannot guess until the wheel has given you a guess to spend
+                 && p.left > 0 && (p.spin == 'normal' || p.spin == 'double')
+                 && (
+                      // too low: the floor rises to the guess
+                      (e.side == 'low' && n.lo == e.g && n.hi == p.hi
+                        && n.over == false && n.loser == null
+                        && ((last && n.turn == up && n.spin == '' && n.left == 0)
+                            || (!last && n.turn == p.turn && n.spin == p.spin && n.left == p.left - 1)))
+                      ||
+                      // too high: the ceiling drops to the guess
+                      (e.side == 'high' && n.hi == e.g && n.lo == p.lo
+                        && n.over == false && n.loser == null
+                        && ((last && n.turn == up && n.spin == '' && n.left == 0)
+                            || (!last && n.turn == p.turn && n.spin == p.spin && n.left == p.left - 1)))
+                      ||
+                      // detonation: bounds freeze, the guesser is pinned as loser,
+                      // and a second guess owed by Double Trouble is written off
+                      (e.side == 'boom' && n.over == true && n.loser == p.turn
+                        && n.lo == p.lo && n.hi == p.hi && n.turn == p.turn
+                        && n.spin == '' && n.left == 0)
+                    ))
              );
       }
 
@@ -119,7 +176,8 @@ service cloud.firestore {
       function isRematch() {
         let p = resource.data;
         let n = request.resource.data;
-        return p.phase == 'playing'
+        return p.v == 3
+          && p.phase == 'playing'
           && p.over == true
           && p.hostId == request.auth.uid
           && n.v == p.v && n.code == p.code && n.hostId == p.hostId
@@ -129,6 +187,7 @@ service cloud.firestore {
           && n.phase == 'playing'
           && n.lo == p.lo0 && n.hi == p.hi0
           && n.history.size() == 0
+          && n.spin == '' && n.left == 0
           && n.over == false && n.loser == null
           && n.turn is int && n.turn >= 0 && n.turn < p.seats.size()
           && n.bomb is string && n.bomb.size() > 0 && n.bomb.size() <= 256;
