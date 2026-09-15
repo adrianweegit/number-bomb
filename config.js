@@ -9,10 +9,10 @@
 //
 // Without this file the page still works: it falls back to pass-the-phone.
 window.NUMBER_BOMB_FIREBASE = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDcR6yulGrisupTJN0d-rLt2sXwRGfb8Wo",
+  authDomain: "number-bomb-a166b.firebaseapp.com",
+  projectId: "number-bomb-a166b",
+  storageBucket: "number-bomb-a166b.firebasestorage.app",
+  messagingSenderId: "226121513581",
+  appId: "1:226121513581:web:15eedd6db563fee2455d64"
 };
