@@ -421,6 +421,16 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .spin{display:inline-block;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+.toast{
+  position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  transform:translateX(-50%);z-index:60;max-width:min(360px,calc(100vw - 32px));
+  background:var(--ink);color:var(--ground);
+  border:var(--edge) solid var(--ink);border-radius:14px;padding:11px 15px;
+  box-shadow:var(--drop);
+}
+.toast b{display:block;font:400 16px/1.2 Bungee,Impact,sans-serif}
+.toast span{display:block;font-size:13px;line-height:1.35;opacity:.85}
+
 #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
 
 .shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97)}
@@ -449,6 +459,9 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 </head>
 <body>
 <canvas id="fx" aria-hidden="true"></canvas>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden>
+  <b id="toastTitle"></b><span id="toastSub"></span>
+</div>
 
 <main class="wrap" id="app">
 
@@ -774,7 +787,10 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
     <div class="stake">
       <div><span class="label">Penalty due</span><p><b id="overPenalty">&mdash;</b> <span id="overPenaltyText">&mdash;</span></p></div>
     </div>
-    <button class="btn btn--wa btn--wide" id="shareResult" type="button">Break the news on WhatsApp</button>
+    <div class="field">
+      <button class="btn btn--wa btn--wide" id="shareBoom" type="button">Share the boom</button>
+      <p class="hint" id="shareBoomHint">Proof, for the group chat.</p>
+    </div>
     <div class="row2">
       <button class="btn" id="rematch" type="button">Rematch &mdash; same crew</button>
       <button class="btn btn--ghost" id="newGame" type="button">Back to the start</button>
@@ -1263,6 +1279,16 @@ const ENGINE = (() => {
       `Grab a seat: ${base}?r=${code}`
     ].join("\n");
   }
+  /**
+   * Block #6 (?f=) is not shipped, so the link is the bare page URL — the card
+   * still works, and a new group lands on Home to set their own forfeit.
+   */
+  function boomText(name, penalty, base){
+    return [
+      `💣 ${name} popped it. Forfeit: ${penalty}.`,
+      `Your group next: ${base}`
+    ].join("\n");
+  }
 // ===== SHARE TEXT END =====
 
   function openWhatsApp(text, btn){
@@ -1334,16 +1360,202 @@ const ENGINE = (() => {
       turnHandoff()
     ].join("\n");
   }
-  function resultMessage(){
-    const st = S.state, loser = st.players[st.loser], safe = st.history.length - 1;
-    const lastWords = (st.history[st.history.length - 1] || {}).m || "";
-    return [
-      `💥 *BOOM!* ${loser} triggered it.`, "",
-      `The bomb was *${st.secret}*.`,
-      `Survived ${safe} safe guess${safe === 1 ? "" : "es"}.`, "",
-      `${loser} ${st.penalty}. 😈`,
-      ...(lastWords ? ["", `Last words: "${lastWords}"`] : [])
-    ].join("\n");
+
+  // ---------- the detonation card -------------------------------------------
+  // A 1080x1080 PNG drawn on an off-screen canvas, always in light-theme
+  // colours whatever the device is set to, so every forward looks the same.
+
+  const CARD = 1080, PAD = 86, INNER = CARD - PAD * 2;
+  const CARD_INK = "#241C2E", CARD_GROUND = "#E9F0DF", CARD_ACCENT = "#FF4D3D",
+        CARD_MUTED = "#6E6479", CARD_LEMON = "#FFC93C", CARD_EYE = "#FBFDF7";
+
+  /** Use a face only once the browser confirms it is actually loaded. */
+  function cardFace(want, fallback){
+    try { return (document.fonts && document.fonts.check(`400 100px "${want}"`)) ? `"${want}"` : fallback; }
+    catch { return fallback; }
+  }
+
+  /** Largest size at or below max that fits the width. */
+  function fitSize(ctx, text, width, max, weight, family){
+    let size = max;
+    ctx.font = `${weight} ${size}px ${family}`;
+    while (size > 18 && ctx.measureText(text).width > width){
+      size -= 2;
+      ctx.font = `${weight} ${size}px ${family}`;
+    }
+    return size;
+  }
+
+  /**
+   * Wrap to at most maxLines, truncating the last with an ellipsis.
+   * A token wider than the line is broken across lines: a forfeit is 120
+   * characters of anything the group typed, spaces included or not, and an
+   * unbroken one would otherwise be drawn straight past the card's edge.
+   */
+  function wrapLines(ctx, text, width, maxLines){
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = "", truncated = false;
+
+    for (let wi = 0; wi < words.length; wi++){
+      let w = words[wi];
+
+      if (ctx.measureText(w).width > width){
+        if (line){ lines.push(line); line = ""; }
+        while (w && lines.length < maxLines){
+          let cut = w;
+          while (cut.length > 1 && ctx.measureText(cut).width > width) cut = cut.slice(0, -1);
+          lines.push(cut);
+          w = w.slice(cut.length);
+        }
+        if (w || (lines.length >= maxLines && wi < words.length - 1)) truncated = true;
+        if (lines.length >= maxLines) break;
+        continue;
+      }
+
+      const next = line ? line + " " + w : w;
+      if (ctx.measureText(next).width <= width){ line = next; continue; }
+      lines.push(line);
+      line = w;
+      if (lines.length >= maxLines){ truncated = true; break; }
+    }
+
+    if (lines.length < maxLines && line) lines.push(line);
+    else if (line) truncated = true;
+
+    if (truncated && lines.length){
+      let last = lines[lines.length - 1];
+      while (last.length > 1 && ctx.measureText(last + "…").width > width) last = last.slice(0, -1);
+      lines[lines.length - 1] = last + "…";
+    }
+    return lines.slice(0, maxLines);
+  }
+
+  /** The dead bomb, in the same proportions as the one on screen. */
+  function drawDeadBomb(ctx, ox, oy, s){
+    const X = u => ox + u * s, Y = u => oy + u * s, L = u => u * s;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = CARD_LEMON; ctx.lineWidth = L(3.4);
+    ctx.beginPath(); ctx.moveTo(X(31), Y(12));
+    ctx.bezierCurveTo(X(34), Y(4), X(44), Y(6), X(46), Y(2)); ctx.stroke();
+    ctx.fillStyle = CARD_ACCENT;
+    ctx.beginPath(); ctx.arc(X(47), Y(2.5), L(4.5), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = CARD_INK;
+    ctx.fillRect(X(25), Y(11), L(12), L(8));
+    ctx.beginPath(); ctx.arc(X(31), Y(37), L(21), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = CARD_EYE;
+    for (const cx of [24, 38]){ ctx.beginPath(); ctx.arc(X(cx), Y(34), L(6.4), 0, Math.PI * 2); ctx.fill(); }
+    ctx.strokeStyle = CARD_INK; ctx.lineWidth = L(3);
+    for (const cx of [20.5, 34.5]){
+      ctx.beginPath();
+      ctx.moveTo(X(cx), Y(30.5)); ctx.lineTo(X(cx + 7), Y(37.5));
+      ctx.moveTo(X(cx + 7), Y(30.5)); ctx.lineTo(X(cx), Y(37.5));
+      ctx.stroke();
+    }
+    ctx.strokeStyle = CARD_EYE; ctx.lineWidth = L(2.8);
+    ctx.beginPath(); ctx.moveTo(X(25), Y(48.5));
+    ctx.quadraticCurveTo(X(31), Y(42), X(37), Y(48.5)); ctx.stroke();
+  }
+
+  /** Returns a PNG data URL. Synchronous on purpose — see shareBoom(). */
+  function drawCard(st){
+    const name = st.players[st.loser];
+    const display = cardFace("Bungee", "Impact, sans-serif");
+    const body = cardFace("Nunito", "system-ui, sans-serif");
+    const mono = cardFace("Space Mono", "ui-monospace, monospace");
+
+    const c = document.createElement("canvas");
+    c.width = CARD; c.height = CARD;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = CARD_GROUND; ctx.fillRect(0, 0, CARD, CARD);
+    ctx.textBaseline = "alphabetic";
+
+    // wordmark
+    ctx.font = `400 44px ${display}`;
+    ctx.fillStyle = CARD_INK; ctx.fillText("NUMBER ", PAD, PAD + 40);
+    const wmW = ctx.measureText("NUMBER ").width;
+    ctx.fillStyle = CARD_ACCENT; ctx.fillText("BOMB", PAD + wmW, PAD + 40);
+
+    drawDeadBomb(ctx, CARD / 2 - 31 * 5.4, 214, 5.4);
+
+    // headline — sized to the actual string, so no legal name overflows
+    const head = `${name.toUpperCase()} POPPED IT`;
+    const hs = fitSize(ctx, head, INNER, 96, 400, display);
+    ctx.font = `400 ${hs}px ${display}`;
+    ctx.fillStyle = CARD_ACCENT; ctx.fillText(head, PAD, 656);
+
+    // forfeit — at most three lines, ellipsis after
+    ctx.font = `700 42px ${body}`;
+    ctx.fillStyle = CARD_INK;
+    const lines = wrapLines(ctx, st.penalty, INNER, 3);
+    lines.forEach((ln, i) => ctx.fillText(ln, PAD, 726 + i * 54));
+
+    // the numbers, then where it came from
+    ctx.font = `400 30px ${mono}`; ctx.fillStyle = CARD_MUTED;
+    const safe = st.history.length - 1;
+    ctx.fillText(`${st.lo0}–${st.hi0} · ${safe} guess${safe === 1 ? "" : "es"} · it was ${st.secret}`, PAD, 916);
+    ctx.fillText(`${location.host}${location.pathname}`.replace(/\/index\.html$/, "/"), PAD, 958);
+
+    // hazard fuse along the bottom
+    for (let x = -60; x < CARD + 60; x += 52){
+      ctx.fillStyle = ((x / 52) | 0) % 2 ? CARD_ACCENT : CARD_LEMON;
+      ctx.beginPath();
+      ctx.moveTo(x, CARD); ctx.lineTo(x + 26, CARD);
+      ctx.lineTo(x + 26 + 22, CARD - 26); ctx.lineTo(x + 22, CARD - 26);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = CARD_INK; ctx.fillRect(0, CARD - 30, CARD, 5);
+    return c.toDataURL("image/png");
+  }
+
+  function dataUrlToFile(url, filename){
+    const bin = atob(url.split(",")[1]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], filename, { type: "image/png" });
+  }
+
+  let toastTimer = null;
+  function toast(title, sub){
+    clearTimeout(toastTimer);
+    $("toastTitle").textContent = title;
+    $("toastSub").textContent = sub;
+    $("toast").hidden = false;
+    toastTimer = setTimeout(() => { $("toast").hidden = true; }, 2800);
+  }
+
+  function saveCard(dataUrl, filename, text, btn){
+    try {
+      const a = document.createElement("a");
+      a.href = dataUrl; a.download = filename;
+      document.body.append(a); a.click(); a.remove();
+      toast("Saved", "Now go and post it.");
+    } catch { /* download refused */ }
+    copy(text, btn);
+  }
+
+  /**
+   * Draw, then share, with nothing awaited in between: iOS refuses a file
+   * share that leaves the gesture's task, which is why the canvas is read with
+   * the synchronous toDataURL rather than toBlob.
+   */
+  function shareBoom(btn){
+    const st = S.state;
+    if (!st || !st.over) return;
+    const name = st.players[st.loser];
+    const text = boomText(name, st.penalty, shareBase());
+    const filename = S.online && S.code ? `number-bomb-${S.code}.png` : "number-bomb.png";
+    const dataUrl = drawCard(st);
+    const file = dataUrlToFile(dataUrl, filename);
+
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })){
+      navigator.share({ files: [file], text }).catch(e => {
+        if (e && e.name === "AbortError") return;
+        saveCard(dataUrl, filename, text, btn);
+      });
+      return;
+    }
+    saveCard(dataUrl, filename, text, btn);
   }
 
   // ---------- the blast -----------------------------------------------------
@@ -2150,7 +2362,7 @@ const ENGINE = (() => {
   $("relayCopy").addEventListener("click", e => copy(turnHandoff(), e.currentTarget));
   $("relayStay").addEventListener("click", () => { renderPlay(); show("Play"); $("guess").focus(); });
 
-  $("shareResult").addEventListener("click", e => openWhatsApp(resultMessage(), e.currentTarget));
+  $("shareBoom").addEventListener("click", e => shareBoom(e.currentTarget));
   $("rematch").addEventListener("click", doRematch);
   $("newGame").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });
 

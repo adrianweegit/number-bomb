@@ -47,3 +47,15 @@ test("invite text stays under 320 characters with a 120-character forfeit", () =
   assert.match(text, /room 4F2K/, "the code belongs in the text");
   assert.match(text, /\?r=4F2K$/, "the link must carry the room code");
 });
+
+test("detonation share text stays under 400 characters with a 120-character forfeit", () => {
+  const boom = new Function(`${shareSrc}\nreturn boomText;`)();
+  const text = boom(
+    "W".repeat(18),                                 // the longest legal name
+    "x".repeat(120),                                // the rules cap penalty at 120
+    "https://adrianweegit.github.io/number-bomb/"
+  );
+  assert.ok(text.length < 400, `detonation text is ${text.length} characters`);
+  assert.match(text, /popped it\. Forfeit:/, "the forfeit belongs in the text");
+  assert.match(text, /Your group next: https:/, "the link is how a second group arrives");
+});
