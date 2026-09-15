@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Number Bomb</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#17130F">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Number Bomb">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
@@ -388,6 +396,13 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
   border-radius:8px;padding:10px 12px;background:var(--panel-2);
 }
 .offline-note p{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
+.awaynote{
+  margin:0;padding:10px 12px;border-radius:8px;
+  background:var(--panel-2);border:1px solid var(--line);
+  font:400 13px/1.45 "Space Mono",ui-monospace,Menlo,monospace;color:var(--muted);
+}
+.awaynote b{color:var(--ink);font-weight:700}
+.awaynote .up{color:var(--safe)}
 .spin{display:inline-block;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
@@ -429,6 +444,11 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
     </div>
 
     <button class="btn btn--sm btn--ghost" id="resumeLast" type="button" hidden>Rejoin your last game</button>
+
+    <div class="offline-note" id="installHint" hidden>
+      <p id="installText"></p>
+    </div>
+    <button class="btn btn--sm" id="installBtn" type="button" hidden style="align-self:flex-start">Add to Home Screen</button>
   </section>
 
   <!-- ============ HOST A ROOM ============ -->
@@ -584,6 +604,8 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
       <span class="pulse"></span>
       <p><b id="turnName">&mdash;</b><span id="turnSub">&nbsp;</span></p>
     </div>
+
+    <p class="awaynote" id="awayNote" hidden></p>
 
     <div class="rig">
       <div class="bounds">
@@ -898,6 +920,7 @@ const ENGINE = (() => {
     unsubGame: null, unsubSeats: null,
     localMode: "pass", promptedFor: -1, showingOver: false,
     backend: null, bootError: "",
+    seenHistory: 0, wasHidden: false, installEvent: null,
     randomArmed: { host: false, local: false }
   };
 
@@ -965,18 +988,46 @@ const ENGINE = (() => {
     } catch { /* blocked in this frame */ }
   }
   let flashTimer = null;
-  const baseTitle = document.title;
+  const baseTitle = "Number Bomb";
+  let restTitle = baseTitle;
+
+  /**
+   * No backend means nothing can reach a closed browser, so the next best
+   * thing is making a glance answer the question: the tab title, and the app
+   * icon badge once the game is installed to a home screen.
+   */
+  function setStatus({ mine, waitingFor, over }){
+    restTitle = over ? "Boom — " + baseTitle
+              : mine ? "● Your turn — " + baseTitle
+              : waitingFor ? "Waiting for " + waitingFor + " — " + baseTitle
+              : baseTitle;
+    if (!flashTimer){ try { document.title = restTitle; } catch { /* ignore */ } }
+    try {
+      if (mine && !over) navigator.setAppBadge && navigator.setAppBadge(1);
+      else navigator.clearAppBadge && navigator.clearAppBadge();
+    } catch { /* badging unsupported */ }
+  }
+
   function flashTitle(on){
     clearInterval(flashTimer); flashTimer = null;
-    try { document.title = baseTitle; } catch { /* ignore */ }
+    try { document.title = restTitle; } catch { /* ignore */ }
     if (!on) return;
     let t = false;
     flashTimer = setInterval(() => {
       t = !t;
-      try { document.title = t ? "💣 YOUR TURN" : baseTitle; } catch { /* ignore */ }
+      try { document.title = t ? "💣 YOUR TURN" : restTitle; } catch { /* ignore */ }
     }, 900);
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) flashTitle(false); });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden){ S.wasHidden = true; return; }
+    flashTitle(false);
+    // Coming back is the moment to answer "did anything happen?" — a mobile
+    // browser suspends a background tab, so the live listener may have been
+    // asleep and any prompt never fired.
+    if (S.state && !$("screenPlay").hidden) renderPlay();
+    if (S.state && S.online && isMyTurn() && !S.state.over) promptMyTurn();
+  });
 
   function promptMyTurn(){
     const st = S.state;
@@ -1259,6 +1310,25 @@ const ENGINE = (() => {
     $("guess").max = st.hi - 1;
     $("guess").placeholder = `${st.lo + 1}–${st.hi - 1}`;
 
+    // "While you were away": what moved since this page was last looked at.
+    const note = $("awayNote");
+    const seat = mySeatIndex();
+    // Count only what other people did — your own last move is not news.
+    const missed = st.history.slice(S.seenHistory).filter(x => x.p !== seat).length;
+    if (document.visibilityState === "visible"){
+      if (S.wasHidden && missed > 0){
+        note.hidden = false;
+        note.innerHTML = `<b>${missed} guess${missed === 1 ? "" : "es"}</b> while you were away — ` +
+          `the range closed to <b>${st.lo}–${st.hi}</b>.`;
+      } else if (missed <= 0){
+        note.hidden = true;
+      }
+      S.seenHistory = st.history.length;
+      S.wasHidden = false;
+    }
+
+    setStatus({ mine: S.online && mine, waitingFor: S.online && !mine ? st.players[st.turn] : null, over: false });
+
     renderLog($("log"));
     $("logEmpty").hidden = st.history.length > 0;
     $("abandon").textContent = S.online ? "Leave this game" : "End game & start over";
@@ -1278,6 +1348,7 @@ const ENGINE = (() => {
     $("rematchWait").hidden = !(S.online && !S.isHost);
     $("newGame").textContent = S.online ? "Leave the room" : "Back to the start";
     renderLog($("overLog"));
+    setStatus({ mine: false, waitingFor: null, over: true });
     flashTitle(false);
     show("Over");
     S.showingOver = true;
@@ -1390,9 +1461,37 @@ const ENGINE = (() => {
     S.online = false; S.code = null; S.state = null; S.doc = null; S.seats = [];
     S.showingOver = false; S.promptedFor = -1;
     store.drop("nb.room");
+    S.seenHistory = 0; S.wasHidden = false;
+    setStatus({ mine: false, waitingFor: null, over: false });
     flashTitle(false);
     renderHome(message || "");
   }
+
+  // ---------- installing ----------------------------------------------------
+  const installed = () => {
+    try {
+      return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || window.navigator.standalone === true;
+    } catch { return false; }
+  };
+
+  function renderInstallHint(){
+    const hint = $("installHint"), btn = $("installBtn");
+    if (installed() || !canLinkShare()){ hint.hidden = true; btn.hidden = true; return; }
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    hint.hidden = false;
+    btn.hidden = !S.installEvent;
+    $("installText").textContent = ios
+      ? "Add this to your Home Screen (Share → Add to Home Screen). It opens like an app, and iPhones only allow turn alerts once it is installed."
+      : "Add this to your Home Screen. It opens like an app and badges its icon when it is your turn.";
+  }
+
+  window.addEventListener("beforeinstallprompt", e => {
+    e.preventDefault();
+    S.installEvent = e;
+    if (!$("screenHome").hidden) renderInstallHint();
+  });
+  window.addEventListener("appinstalled", () => { S.installEvent = null; renderInstallHint(); });
 
   // ---------- home ----------------------------------------------------------
   function renderHome(message){
@@ -1411,6 +1510,8 @@ const ENGINE = (() => {
     const last = store.get("nb.room", null);
     $("resumeLast").hidden = !(synced && typeof last === "string" && last.length === 4);
     $("mastTag").textContent = open ? "Open room" : synced ? "Synced" : "Ready";
+    setStatus({ mine: false, waitingFor: null, over: false });
+    renderInstallHint();
     show("Home");
   }
 
@@ -1658,6 +1759,15 @@ const ENGINE = (() => {
   $("hostBack").addEventListener("click", () => renderHome());
   $("joinBack").addEventListener("click", () => renderHome());
   $("localBack").addEventListener("click", () => renderHome());
+  $("installBtn").addEventListener("click", async () => {
+    if (!S.installEvent) return;
+    const e = S.installEvent;
+    S.installEvent = null;
+    $("installBtn").hidden = true;
+    try { e.prompt(); await e.userChoice; } catch { /* dismissed */ }
+    renderInstallHint();
+  });
+
   $("resumeLast").addEventListener("click", async () => {
     const code = store.get("nb.room", null);
     if (!code) return;
@@ -1789,6 +1899,14 @@ const ENGINE = (() => {
 
   window.addEventListener("hashchange", () => { resumeFromLink(); });
   window.addEventListener("beforeunload", stopSubs);
+
+  // Offline support and the home-screen install both need the worker, but it
+  // is meaningless in an embedded frame or off a file:// path.
+  if ("serviceWorker" in navigator && canLinkShare()){
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => { /* not fatal */ });
+    });
+  }
 
   // ---------- boot ----------------------------------------------------------
   // The page renders and plays before any capability answers; synced rooms

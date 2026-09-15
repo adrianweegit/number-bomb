@@ -28,6 +28,13 @@ moment someone plays.
 - Only the player whose turn it is gets a guess box.
 - When it becomes your turn the page prompts you — a buzz, a chime, and a
   browser notification if you allowed one.
+- **Install it to your Home Screen** and it opens like an app, badges its icon
+  when you are up, and works offline for pass-the-phone. On iPhone this is also
+  what lets Safari show turn alerts at all.
+- The tab title says whose turn it is, so a glance answers it without opening
+  anything: *● Your turn* or *Waiting for Mei*.
+- Come back after a while and it tells you what you missed — how many guesses
+  went by and where the range closed to.
 - **No clock.** Take an hour or a week between turns. Close the page and come
   back; your seat is still yours and the game is where you left it.
 - The host can deal a rematch and every phone follows.
@@ -144,10 +151,27 @@ means Firebase's Blaze plan.
 This is a game about who eats the last spring roll. If your group has that one
 person, play pass-the-phone on one device, where there is nothing to inspect.
 
+**Nothing can reach you once the browser is fully closed.** This is a static
+site with no server of its own, and a web page cannot send a notification when
+it is not running. Installing to the Home Screen and allowing notifications
+covers the case where the game is open in the background; past that, the page
+can only make checking cheap — an app icon that badges, a tab title that says
+whose turn it is, and a summary of what you missed.
+
+Reaching a closed phone needs something running elsewhere, and there are only
+two honest routes: web push through a small always-on endpoint holding the send
+key, or WhatsApp's Business Cloud API. Worth knowing before anyone plans
+around it: **no official API can post into a WhatsApp group.** The Cloud API is
+strictly one-to-one, so nudges there would arrive as direct messages from a
+business number, cost per message, and need each player's phone number. Posting
+into the group itself is only possible by driving a logged-in personal account
+with an unofficial library, against WhatsApp's terms and at the risk of that
+number being banned.
+
 **A player who wanders off stalls the game.** There is no turn timer and no way
 to skip someone — deliberately, since the whole point is that it waits. The
-nudge button sends them a WhatsApp message; beyond that, the host starts a fresh
-room.
+nudge button sends them a WhatsApp message by hand; beyond that, the host starts
+a fresh room.
 
 ---
 
@@ -160,6 +184,8 @@ room.
 | `firestore.rules` | The security boundary for synced rooms. |
 | `firestore.rules.test.mjs` | Those rules, against the emulator. |
 | `config.example.js` | Copy to `config.js` with your Firebase project's values. |
+| `manifest.webmanifest` | Makes it installable to a Home Screen. |
+| `sw.js` | Service worker. Network-first, so it never serves a stale game. |
 | `FIREBASE-SETUP.md` | The fifteen minutes of console work, step by step. |
 
 The rules of the game live in one marked block inside `index.html` so the page

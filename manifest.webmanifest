@@ -1,0 +1,15 @@
+{
+  "name": "Number Bomb",
+  "short_name": "Number Bomb",
+  "description": "A turn-based party game. Guess inside a shrinking range; whoever hits the hidden number pays the forfeit.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#17130F",
+  "theme_color": "#17130F",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
