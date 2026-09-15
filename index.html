@@ -1277,7 +1277,9 @@ const ENGINE = (() => {
       $("turnSub").textContent = `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
     } else if (S.online){
       $("turnName").textContent = `${st.players[st.turn]} is up`;
-      $("turnSub").textContent = "This page updates the moment they play. You can close it.";
+      $("turnSub").textContent = mySeatIndex() < 0
+        ? "You set the bomb, so you are refereeing — you never get a turn."
+        : "This page updates the moment they play. You can close it.";
     } else {
       $("turnName").textContent = st.players[st.turn];
       $("turnSub").textContent = `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
@@ -1442,12 +1444,15 @@ const ENGINE = (() => {
       li.append(dot, nm, tag);
       host.append(li);
     });
-    $("seatHint").hidden = S.seats.length > 0;
-    $("seatHint").textContent = "Seats appear here the moment someone joins.";
+    const refereeing = S.isHost && !S.seats.some(s => s.id === seatId);
+    $("seatHint").hidden = S.seats.length > 0 && !refereeing;
+    $("seatHint").textContent = refereeing
+      ? "You set the bomb, so you are not at the table — you will watch this one out."
+      : "Seats appear here the moment someone joins.";
     $("startBtn").hidden = !S.isHost;
     $("lobbyWait").hidden = S.isHost;
     $("startBtn").textContent = S.seats.length < 2
-      ? "Waiting for one more player…"
+      ? (refereeing ? "Waiting — a refereed game needs two players…" : "Waiting for one more player…")
       : `Start with ${S.seats.length} players`;
     $("startBtn").disabled = S.seats.length < 2;
     show("Lobby");
@@ -1565,11 +1570,18 @@ const ENGINE = (() => {
   function wireBomb(which, loId, hiId, secretId, peekId, randId, noteId){
     const syncNote = () => {
       const lo = parseInt($(loId).value, 10), hi = parseInt($(hiId).value, 10);
-      $(noteId).textContent = (Number.isInteger(lo) && Number.isInteger(hi) && hi - lo >= 2)
-        ? (S.randomArmed[which]
-            ? "Armed at random. Nobody has seen it — everyone can play."
-            : `Must sit strictly inside the range — ${lo + 1} to ${hi - 1}.`)
-        : "The range needs at least one number inside it, e.g. 1 to 100.";
+      if (!(Number.isInteger(lo) && Number.isInteger(hi) && hi - lo >= 2)){
+        $(noteId).textContent = "The range needs at least one number inside it, e.g. 1 to 100.";
+        return;
+      }
+      const armed = S.randomArmed[which];
+      // In a room the host is seated automatically, so the consequence of
+      // typing a number yourself has to be stated before they commit to it.
+      const consequence = which !== "host" ? ""
+        : armed ? " You play too." : " You will referee this game — no turn for you.";
+      $(noteId).textContent = (armed
+        ? "Armed at random. Nobody has seen it — not even you."
+        : `Must sit strictly inside the range — ${lo + 1} to ${hi - 1}.`) + consequence;
     };
     $(peekId).addEventListener("click", () => {
       const f = $(secretId), showing = f.type === "text";
@@ -1787,6 +1799,8 @@ const ENGINE = (() => {
     store.set("nb.myname", name);
     store.set("nb.penalty", cfg.penalty);
     store.set("nb.range", [cfg.lo, cfg.hi]);
+    // Read before hostBomb.reset() clears it.
+    const armedRandom = S.randomArmed.host;
     $("createBtn").disabled = true;
     $("createBtn").innerHTML = '<span class="spin">◠</span> Opening the room…';
     try {
@@ -1798,7 +1812,11 @@ const ENGINE = (() => {
         players: [], seats: [], turn: 0, history: [], over: false, loser: null,
         createdAt: Date.now(), updatedAt: Date.now()
       });
-      await S.db.doc(`rooms/${code}/seats/${seatId}`).set({ name, joinedAt: Date.now() });
+      // Whoever typed the number knows where the bomb is, so they referee
+      // rather than play. Arming it at random is what lets the host join in.
+      if (armedRandom){
+        await S.db.doc(`rooms/${code}/seats/${seatId}`).set({ name, joinedAt: Date.now() });
+      }
       hostBomb.reset();
       enterRoom(code, true);
     } catch (e){

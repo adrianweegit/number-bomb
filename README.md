@@ -25,6 +25,9 @@ code from their own phone, anywhere in the world. One shared game: the range,
 the turn order and the bomb live in one place, and every phone updates the
 moment someone plays.
 
+- **Whoever types the number referees and does not get a turn** — they know
+  where the bomb is. Tap **Random** instead and nobody knows it, host included,
+  so everyone at the table plays.
 - Only the player whose turn it is gets a guess box.
 - When it becomes your turn the page prompts you — a buzz, a chime, and a
   browser notification if you allowed one.
