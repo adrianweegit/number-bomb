@@ -251,6 +251,15 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .rig-note .tight{color:var(--accent)}
 
 /* ---------- turn bar ---------- */
+.watching{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  background:var(--grape);color:var(--panel);
+  border:var(--edge) solid var(--ink);border-radius:16px;padding:12px 14px;
+}
+.watching>div{flex:1 1 180px;min-width:0}
+.watching b{display:block;font:400 17px/1.15 Bungee,Impact,sans-serif}
+.watching span{display:block;font-size:13.5px;line-height:1.35;opacity:.9}
+
 .turnbar{
   display:flex;align-items:center;gap:13px;
   background:var(--panel-2);border:var(--edge) solid var(--ink);border-radius:16px;padding:12px 14px;
@@ -551,7 +560,10 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
       <button class="btn btn--sm" id="copyCode" type="button">Copy</button>
     </div>
 
-    <button class="btn btn--wa btn--wide" id="inviteBtn" type="button">Invite the group on WhatsApp</button>
+    <div class="field">
+      <button class="btn btn--wa btn--wide" id="inviteBtn" type="button">Invite</button>
+      <p class="hint" id="inviteHint">Drops the link in the group chat.</p>
+    </div>
 
     <div>
       <span class="label" style="display:block;margin-bottom:9px">At the table</span>
@@ -631,6 +643,14 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 
   <!-- ============ PLAY ============ -->
   <section id="screenPlay" class="panel" hidden aria-labelledby="turnName">
+    <div class="watching" id="watchBanner" hidden>
+      <div>
+        <b>Watching</b>
+        <span>Room's full and mid-game. Start your own when it's over.</span>
+      </div>
+      <button class="btn btn--sm" id="watchStart" type="button">Start your own</button>
+    </div>
+
     <div class="turnbar" id="turnBar">
       <span class="mascot" id="mascot" data-mood="calm" aria-hidden="true">
         <svg viewBox="-6 -8 74 74">
@@ -1010,6 +1030,7 @@ const ENGINE = (() => {
     backend: null, bootError: "",
     seenHistory: 0, wasHidden: false, installEvent: null,
     lastTaunt: "", tauntTurn: -1,
+    pendingRoom: null, watching: false,
     randomArmed: { host: false, local: false }
   };
 
@@ -1214,11 +1235,54 @@ const ENGINE = (() => {
   const turnHandoff = () => canLinkShare() ? turnLink() : turnCode();
   const waLink = text => "https://wa.me/?text=" + encodeURIComponent(text);
 
+  /**
+   * Web Share, then WhatsApp, then the clipboard — first one that works wins,
+   * with no menu. A cancelled share sheet is a decision, not a failure, so it
+   * must not fall through to opening WhatsApp behind the player's back.
+   */
+  async function shareCascade(text, btn){
+    if (navigator.share){
+      try { await navigator.share({ text }); return; }
+      catch (e){ if (e && e.name === "AbortError") return; }
+    }
+    let w = null;
+    try { w = window.open(waLink(text), "_blank", "noopener"); } catch { w = null; }
+    if (!w) copy(text, btn);
+  }
+
+  /** origin + path only: no query, no fragment, so links never double up. */
+  const shareBase = () => location.origin + location.pathname;
+
+// ===== SHARE TEXT START =====
+  // Extracted by page.test.mjs, which builds these with the longest legal
+  // inputs to check they stay inside what a chat app shows without truncating.
+  function inviteText(code, penalty, base){
+    return [
+      `💣 Number Bomb — room ${code}`,
+      `Loser ${penalty}.`,
+      `Grab a seat: ${base}?r=${code}`
+    ].join("\n");
+  }
+// ===== SHARE TEXT END =====
+
   function openWhatsApp(text, btn){
     let w = null;
     try { w = window.open(waLink(text), "_blank", "noopener"); } catch { w = null; }
     if (!w) copy(text, btn);
   }
+  /**
+   * ?r=CODE from an invite. Four characters of the room alphabet, which has no
+   * I, O, 0 or 1 in it, so a code containing one is not a code and is ignored.
+   */
+  function roomFromQuery(){
+    let raw = "";
+    try { raw = new URLSearchParams(location.search).get("r") || ""; } catch { return null; }
+    const code = raw.trim().toUpperCase();
+    if (code.length !== 4) return null;
+    for (const ch of code) if (!ENGINE.CODE_ALPHABET.includes(ch)) return null;
+    return code;
+  }
+
   function readToken(raw){
     const text = String(raw || "").trim();
     if (!text) return null;
@@ -1249,19 +1313,6 @@ const ENGINE = (() => {
     }, 2200);
   }
 
-  function inviteMessage(){
-    const d = S.doc || {};
-    return [
-      "💣 *NUMBER BOMB* — join my table.",
-      "",
-      `Room code: *${S.code}*`,
-      `Loser ${d.penalty || "pays up"}.`,
-      "",
-      canLinkShare()
-        ? `Open this, tap “Join a game”, enter ${S.code}:\n${baseUrl()}`
-        : `Open Number Bomb, tap “Join a game” and enter ${S.code}.`
-    ].join("\n");
-  }
   function nudgeMessage(){
     const st = S.state;
     return [
@@ -1390,7 +1441,9 @@ const ENGINE = (() => {
         : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`);
     } else if (S.online){
       $("turnName").textContent = `${st.players[st.turn]} is up`;
-      $("turnSub").textContent = mySeatIndex() < 0
+      // Only the host who armed the bomb is refereeing; anyone else without a
+      // seat arrived on an invite to a game already running.
+      $("turnSub").textContent = (mySeatIndex() < 0 && S.isHost)
         ? "You set the bomb. You just have to watch, like a parent at sports day."
         : "Updates the second they move. Go and do something else.";
     } else {
@@ -1424,6 +1477,7 @@ const ENGINE = (() => {
       pips.append(s);
     });
 
+    $("watchBanner").hidden = !S.watching;
     $("guessBlock").hidden = S.online && !mine;
     $("nudgeBtn").hidden = !(S.online && !mine);
     if (S.tauntTurn !== st.history.length && !$("sayIt").value){
@@ -1589,6 +1643,7 @@ const ENGINE = (() => {
       try { await S.db.doc(`rooms/${S.code}/seats/${seatId}`).delete(); } catch { /* best effort */ }
     }
     S.online = false; S.code = null; S.state = null; S.doc = null; S.seats = [];
+    S.watching = false;
     S.showingOver = false; S.promptedFor = -1;
     store.drop("nb.room");
     S.seenHistory = 0; S.wasHidden = false;
@@ -1622,6 +1677,33 @@ const ENGINE = (() => {
     if (!$("screenHome").hidden) renderInstallHint();
   });
   window.addEventListener("appinstalled", () => { S.installEvent = null; renderInstallHint(); });
+
+  /** Where a ?r= link lands, once a backend has answered. */
+  async function enterFromInvite(code){
+    const toJoin = () => {
+      $("joinCode").value = code;
+      err("joinErr", "");
+      show("Join");
+      $("joinName").focus();
+    };
+    try {
+      const snap = await S.db.doc("rooms/" + code).get();
+      // No such room: fill the code anyway and let the existing not-found
+      // handling speak when they tap Join.
+      if (!snap.exists) return toJoin();
+
+      const d = snap.data();
+      const seated = Array.isArray(d.seats) && d.seats.includes(seatId);
+      if (d.phase === "lobby") return toJoin();
+      // A player following their own invite back into a running game resumes;
+      // only a stranger watches.
+      if (d.over || seated){ S.watching = false; return enterRoom(code, d.hostId === seatId); }
+      S.watching = true;
+      enterRoom(code, d.hostId === seatId);
+    } catch (e){
+      renderHome(dbMessage(e));
+    }
+  }
 
   // ---------- home ----------------------------------------------------------
   function renderHome(message){
@@ -2020,7 +2102,15 @@ const ENGINE = (() => {
     } catch (e){ err("lobbyErr", dbMessage(e)); $("startBtn").disabled = false; }
   });
   $("copyCode").addEventListener("click", e => copy(S.code, e.currentTarget));
-  $("inviteBtn").addEventListener("click", e => openWhatsApp(inviteMessage(), e.currentTarget));
+  $("inviteBtn").addEventListener("click", e =>
+    shareCascade(inviteText(S.code, (S.doc || {}).penalty || "pays up", shareBase()), e.currentTarget));
+
+  $("watchStart").addEventListener("click", async () => {
+    await leaveRoom();
+    err("hostErr", "");
+    show("Host");
+    $("hostName").focus();
+  });
   $("leaveLobby").addEventListener("click", () => leaveRoom());
   $("nudgeBtn").addEventListener("click", e => openWhatsApp(nudgeMessage(), e.currentTarget));
 
@@ -2079,6 +2169,11 @@ const ENGINE = (() => {
   // The page renders and plays before any capability answers; synced rooms
   // light up if and when the store resolves.
   function boot(){
+    S.pendingRoom = roomFromQuery();
+    if (S.pendingRoom){
+      // Strip it now so a reload does not re-trigger the invite.
+      try { history.replaceState(null, "", shareBase()); } catch { /* sandboxed */ }
+    }
     if (!resumeFromLink()) renderHome();
   }
   boot();
@@ -2104,6 +2199,13 @@ const ENGINE = (() => {
     }
     S.probed = true;
     if (!$("screenHome").hidden) renderHome(S.bootError || "");
+    // An invite needs a backend, which only answers now. Without one the
+    // parameter is simply ignored and Home already explains why.
+    if (S.db && S.pendingRoom && !$("screenHome").hidden){
+      const code = S.pendingRoom;
+      S.pendingRoom = null;
+      enterFromInvite(code);
+    }
   })();
 })();
 </script>

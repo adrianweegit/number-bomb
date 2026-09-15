@@ -28,6 +28,10 @@ moment someone plays.
 - **Whoever types the number referees and does not get a turn** — they know
   where the bomb is. Tap **Random** instead and nobody knows it, host included,
   so everyone at the table plays.
+- **Invite by link.** The lobby's Invite button shares a message carrying the
+  room code, the forfeit and a `?r=CODE` link. Opening that link fills the code
+  in for the arriving player; if the game has already started they get a
+  read-only **Watching** view instead.
 - Only the player whose turn it is gets a guess box.
 - **Trash talk with your guess.** One optional line, capped at 80 characters,
   shown under your name in the cut log. The box asks for it differently every
