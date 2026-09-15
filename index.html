@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Number Bomb</title>
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#17130F">
+<meta name="theme-color" content="#E9F0DF">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="mobile-web-app-capable" content="yes">
@@ -14,301 +14,391 @@
 <meta name="apple-mobile-web-app-title" content="Number Bomb">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap">
 <style>
-/* ---------- tokens: light is the bare :root, dark redefines ---------- */
+/* ---------- Nervous Bomb ----------------------------------------------------
+   The bomb is a character and his face is the danger read-out, so the joke
+   carries information rather than decorating it. Everything else is built to
+   sit around that: sticker outlines, hard offset shadows, one tilted label.
+   Light is the bare :root; dark redefines only the tokens.                  */
 :root{
-  --ground:#EFEBE4;
-  --panel:#F8F5F0;
-  --panel-2:#E7E1D7;
-  --ink:#221C17;
-  --muted:#6E6459;
-  --line:#D9D2C7;
-  --accent:#D93A1F;
-  --accent-soft:#F6DED8;
-  --fuse:#E09512;
-  --fuse-dim:#C9821020;
-  --safe:#2F7A66;
-  --shadow:0 1px 0 rgba(34,28,23,.06), 0 10px 28px -18px rgba(34,28,23,.5);
-  --radius:10px;
+  --ground:#E9F0DF;
+  --panel:#FBFDF7;
+  --panel-2:#DCE8CE;
+  --ink:#241C2E;
+  --muted:#6E6479;
+  --line:#C3D4AE;
+  --accent:#FF4D3D;
+  --accent-soft:#FFE1DC;
+  --grape:#5B3C9E;
+  --lemon:#FFC93C;
+  --lemon-ink:#6B5300;
+  --safe:#2E9E6B;
+  --wa:#1F8F4E;
+  --edge:3px;
+  --drop:4px 4px 0 var(--grape);
+  --drop-sm:3px 3px 0 var(--ink);
+  --radius:18px;
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --ground:#17130F;
-    --panel:#211B16;
-    --panel-2:#2B231C;
-    --ink:#F2EBE1;
-    --muted:#9A8E80;
-    --line:#372E26;
-    --accent:#FF5333;
-    --accent-soft:#3A1A12;
-    --fuse:#F5A623;
-    --fuse-dim:#F5A62318;
-    --safe:#4FA98F;
-    --shadow:0 1px 0 rgba(0,0,0,.4), 0 14px 34px -20px rgba(0,0,0,.9);
+    --ground:#1E1630; --panel:#2A1F42; --panel-2:#362A52;
+    --ink:#F6EFFF; --muted:#A99BC2; --line:#4A3A6B;
+    --accent:#FF6A57; --accent-soft:#4A2233;
+    --grape:#B79BFF; --lemon:#FFD25E; --lemon-ink:#3A2B00;
+    --safe:#4FD0A0;
+    --drop:4px 4px 0 rgba(0,0,0,.55); --drop-sm:3px 3px 0 rgba(0,0,0,.55);
   }
 }
 :root[data-theme="dark"]{
-  --ground:#17130F;
-  --panel:#211B16;
-  --panel-2:#2B231C;
-  --ink:#F2EBE1;
-  --muted:#9A8E80;
-  --line:#372E26;
-  --accent:#FF5333;
-  --accent-soft:#3A1A12;
-  --fuse:#F5A623;
-  --fuse-dim:#F5A62318;
-  --safe:#4FA98F;
-  --shadow:0 1px 0 rgba(0,0,0,.4), 0 14px 34px -20px rgba(0,0,0,.9);
+  --ground:#1E1630; --panel:#2A1F42; --panel-2:#362A52;
+  --ink:#F6EFFF; --muted:#A99BC2; --line:#4A3A6B;
+  --accent:#FF6A57; --accent-soft:#4A2233;
+  --grape:#B79BFF; --lemon:#FFD25E; --lemon-ink:#3A2B00;
+  --safe:#4FD0A0;
+  --drop:4px 4px 0 rgba(0,0,0,.55); --drop-sm:3px 3px 0 rgba(0,0,0,.55);
 }
 
 *,*::before,*::after{box-sizing:border-box}
 body{
-  margin:0;
-  background:var(--ground);
-  color:var(--ink);
-  font:400 16px/1.5 "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
-  -webkit-font-smoothing:antialiased;
-  overflow-x:hidden;
+  margin:0;background:var(--ground);color:var(--ink);
+  font:600 16px/1.5 Nunito,system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
 }
 img{max-width:100%}
 [hidden]{display:none !important}
 
 .wrap{
-  width:100%;
-  max-width:560px;
-  margin:0 auto;
-  padding-inline:18px;
-  padding-block:22px 40px;
-  display:flex;
-  flex-direction:column;
-  gap:22px;
+  width:100%;max-width:460px;margin:0 auto;
+  padding-inline:18px;padding-block:20px 44px;
+  display:flex;flex-direction:column;gap:18px;
 }
 
 /* ---------- masthead ---------- */
-.mast{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mast{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .mast h1{
-  font:400 clamp(34px,10vw,46px)/.9 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
-  letter-spacing:.01em;text-transform:uppercase;margin:0;text-wrap:balance;
+  font:400 clamp(27px,8.4vw,34px)/1 Bungee,Impact,"Arial Black",sans-serif;
+  margin:0;letter-spacing:-.01em;text-wrap:balance;
 }
 .mast h1 em{font-style:normal;color:var(--accent)}
 .stencil{
   font:700 10px/1 "Space Mono",ui-monospace,Menlo,monospace;
-  letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
-  border:1px solid var(--line);border-radius:3px;padding:5px 7px;white-space:nowrap;
+  letter-spacing:.13em;text-transform:uppercase;
+  background:var(--grape);color:var(--panel);
+  border:2px solid var(--ink);border-radius:999px;padding:6px 10px;white-space:nowrap;
 }
 
-/* ---------- generic panel ---------- */
+/* ---------- panels ---------- */
 .panel{
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  padding:18px;
-  display:flex;flex-direction:column;gap:14px;
+  background:var(--panel);border:var(--edge) solid var(--ink);border-radius:var(--radius);
+  box-shadow:var(--drop);padding:18px;display:flex;flex-direction:column;gap:15px;
 }
 .label{
   font:700 10px/1 "Space Mono",ui-monospace,Menlo,monospace;
-  letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+  letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
 }
-.hint{margin:0;color:var(--muted);font-size:13.5px;line-height:1.45}
+.hint{margin:0;color:var(--muted);font-size:13.5px;line-height:1.45;font-weight:600}
 
-/* ---------- form controls ---------- */
-input[type="text"],input[type="number"],input[type="password"]{
-  width:100%;font:500 16px/1.2 "Archivo",system-ui,sans-serif;
-  color:var(--ink);background:var(--ground);
-  border:1px solid var(--line);border-radius:8px;padding:11px 12px;
-  -webkit-appearance:none;appearance:none;
+/* ---------- controls ---------- */
+input[type="text"],input[type="number"],input[type="password"],textarea{
+  width:100%;font:700 16px/1.2 Nunito,system-ui,sans-serif;color:var(--ink);
+  background:var(--panel);border:var(--edge) solid var(--ink);border-radius:13px;
+  padding:11px 13px;-webkit-appearance:none;appearance:none;
 }
-input[type="number"]{font-family:"Space Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+input[type="number"]{font-family:"Space Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
 input[type="number"]{-moz-appearance:textfield}
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
-input::placeholder{color:var(--muted);opacity:.75}
-input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input::placeholder{color:var(--muted);opacity:.8;font-weight:600}
+input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
+  outline:3px solid var(--grape);outline-offset:2px;
+}
 
 .btn{
-  font:600 15px/1 "Archivo",system-ui,sans-serif;
-  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);
-  padding:13px 16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  text-decoration:none;transition:transform .12s ease, filter .12s ease;
+  font:800 15px/1 Nunito,system-ui,sans-serif;
+  border:var(--edge) solid var(--ink);border-radius:13px;
+  background:var(--panel-2);color:var(--ink);box-shadow:var(--drop-sm);
+  padding:12px 16px;cursor:pointer;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;
+  transition:transform .1s ease, box-shadow .1s ease;
 }
-.btn:active{transform:translateY(1px)}
-.btn--primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn--wa{background:#1F8F4E;border-color:#1F8F4E;color:#fff}
-.btn--ghost{background:transparent}
+.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
+.btn--primary{background:var(--accent);color:#fff;font-family:Bungee,Impact,sans-serif;font-weight:400;font-size:16px}
+.btn--wa{background:var(--wa);color:#fff}
+.btn--ghost{background:transparent;box-shadow:none}
+.btn--ghost:active{transform:translateY(1px)}
 .btn--wide{width:100%}
-.btn--sm{padding:9px 12px;font-size:13px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn--sm{padding:9px 12px;font-size:13px;box-shadow:2px 2px 0 var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
 
-/* ---------- player roster ---------- */
-.roster{display:flex;flex-direction:column;gap:8px}
+/* ---------- roster ---------- */
+.roster{display:flex;flex-direction:column;gap:9px}
 .slot{display:flex;align-items:center;gap:9px}
 .slot-no{
-  flex:0 0 26px;text-align:center;
-  font:700 12px/1 "Space Mono",ui-monospace,monospace;color:var(--muted);
-  font-variant-numeric:tabular-nums;
+  flex:0 0 26px;text-align:center;color:var(--muted);
+  font:700 12px/1 "Space Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;
 }
+.slot input{min-width:0}
 .slot .x{
-  flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--muted);
-  border-radius:8px;width:38px;height:40px;cursor:pointer;font-size:17px;line-height:1;
+  flex:0 0 auto;width:42px;height:44px;cursor:pointer;font-size:19px;line-height:1;
+  border:var(--edge) solid var(--ink);border-radius:13px;background:var(--panel-2);color:var(--muted);
 }
-.slot .x:hover{color:var(--accent);border-color:var(--accent)}
+.slot .x:hover{background:var(--accent);color:#fff}
 
 /* ---------- segmented ---------- */
-.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg{display:flex;border:var(--edge) solid var(--ink);border-radius:13px;overflow:hidden}
 .seg button{
   flex:1;border:0;background:transparent;color:var(--muted);cursor:pointer;
-  padding:11px 8px;font:600 13px/1.25 "Archivo",system-ui,sans-serif;
+  padding:11px 8px;font:800 13px/1.25 Nunito,system-ui,sans-serif;
 }
+.seg button+button{border-left:var(--edge) solid var(--ink)}
 .seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
 
 .row2{display:flex;gap:10px;flex-wrap:wrap}
 .row2>*{flex:1 1 130px;min-width:0}
-.field{display:flex;flex-direction:column;gap:6px}
+.field{display:flex;flex-direction:column;gap:7px}
 
 /* ---------- penalty chips ---------- */
 .chips{display:flex;flex-wrap:wrap;gap:7px}
 .chip{
-  border:1px dashed var(--line);background:transparent;color:var(--muted);
+  border:2px dashed var(--line);background:transparent;color:var(--muted);
   border-radius:999px;padding:7px 12px;cursor:pointer;
-  font:500 13px/1 "Archivo",system-ui,sans-serif;
+  font:700 13px/1 Nunito,system-ui,sans-serif;
 }
 .chip:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
 
-/* ---------- the rig: bounds + fuse ---------- */
-.rig{display:flex;flex-direction:column;gap:12px}
+/* ---------- the mascot: his face IS the danger gauge ---------- */
+.mascot{flex:0 0 auto;display:block;width:62px;height:62px}
+.mascot svg{display:block;width:100%;height:100%;overflow:visible}
+.m-body{fill:#241C2E;stroke:var(--ink);stroke-width:1.5}
+.m-eye{fill:#FBFDF7}
+.m-pupil{fill:#241C2E}
+.m-shine{fill:#fff}
+.m-fuse{stroke:var(--lemon);stroke-width:3.4;fill:none;stroke-linecap:round}
+.m-spark{fill:var(--accent)}
+.m-sweat{fill:#4FC3F7;opacity:0}
+.m-mouth{stroke:#FBFDF7;stroke-width:2.8;fill:none;stroke-linecap:round;display:none}
+.m-brow{stroke:#FBFDF7;stroke-width:2.6;stroke-linecap:round;display:none}
+.m-x{stroke:#241C2E}
+.mascot[data-mood="calm"]    .m-m-calm{display:block}
+.mascot[data-mood="nervous"] .m-m-nervous{display:block}
+.mascot[data-mood="worried"] .m-m-worried{display:block}
+.mascot[data-mood="panic"]   .m-m-panic{display:block}
+.mascot[data-mood="dead"]    .m-m-dead{display:block}
+.mascot[data-mood="nervous"] .m-sweat{opacity:1}
+.mascot[data-mood="worried"] .m-sweat,
+.mascot[data-mood="panic"]   .m-sweat{opacity:1}
+.mascot[data-mood="worried"] .m-brow,
+.mascot[data-mood="panic"]   .m-brow{display:block}
+.mascot[data-mood="panic"]{animation:jitter .32s linear infinite}
+.mascot[data-mood="dead"] .m-eye{fill:#FBFDF7}
+.mascot[data-mood="dead"] .m-pupil{display:none}
+.mascot[data-mood="dead"] .m-x{display:block}
+.m-x{stroke-width:3;stroke-linecap:round;display:none;fill:none}
+@keyframes jitter{
+  0%,100%{transform:translate(0,0) rotate(0)}
+  25%{transform:translate(-1.5px,1px) rotate(-3deg)}
+  50%{transform:translate(1px,-1.5px) rotate(2deg)}
+  75%{transform:translate(1.5px,1px) rotate(3deg)}
+}
+
+/* ---------- the rig ---------- */
+.rig{display:flex;flex-direction:column;gap:11px}
 .bounds{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
-.bound{display:flex;flex-direction:column;gap:3px}
+.bound{display:flex;flex-direction:column;gap:2px;min-width:0}
 .bound--high{text-align:right}
 .bound-num{
-  font:400 clamp(40px,14vw,58px)/.85 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
-  font-variant-numeric:tabular-nums;letter-spacing:.01em;
+  font:400 clamp(38px,12.5vw,50px)/.85 Bungee,Impact,"Arial Black",sans-serif;
+  font-variant-numeric:tabular-nums;
 }
-
-.fuse{position:relative;height:30px;display:flex;align-items:center}
+.fuse{position:relative;height:28px;display:flex;align-items:center}
 .fuse-track{
-  position:absolute;inset:11px 0;border-radius:4px;
-  background:
-    repeating-linear-gradient(115deg,var(--line) 0 5px,transparent 5px 11px),
-    var(--panel-2);
-  border:1px solid var(--line);
+  position:absolute;inset:9px 0;border-radius:99px;
+  background:var(--panel-2);border:var(--edge) solid var(--ink);
 }
 .fuse-live{
-  position:absolute;top:8px;bottom:8px;left:0;width:100%;
-  border-radius:4px;
-  background:linear-gradient(180deg,var(--fuse),color-mix(in srgb,var(--fuse) 72%, #000 28%));
-  box-shadow:0 0 0 1px var(--fuse-dim), 0 0 16px -2px var(--fuse);
+  position:absolute;top:5px;bottom:5px;left:0;width:100%;border-radius:99px;
+  background:repeating-linear-gradient(115deg,var(--lemon) 0 9px,var(--accent) 9px 18px);
+  border:var(--edge) solid var(--ink);
   transition:left .42s cubic-bezier(.2,.9,.25,1), width .42s cubic-bezier(.2,.9,.25,1);
 }
+/* the spark sits on the live end of the fuse */
 .fuse-clamp{
-  position:absolute;top:0;bottom:0;width:3px;background:var(--ink);border-radius:2px;
+  position:absolute;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;
+  background:var(--lemon);border:var(--edge) solid var(--ink);
   transition:left .42s cubic-bezier(.2,.9,.25,1);
 }
-.fuse-clamp::after{
-  content:"";position:absolute;left:50%;top:-1px;width:11px;height:7px;
-  transform:translateX(-50%);background:var(--ink);border-radius:2px;
-}
+.fuse-clamp--low{background:var(--panel)}
 .rig-note{
-  margin:0;font:400 12.5px/1.3 "Space Mono",ui-monospace,Menlo,monospace;
-  color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:0;font:700 12.5px/1.35 "Space Mono",ui-monospace,Menlo,monospace;color:var(--muted);
+  display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
 }
-.rig-note b{color:var(--ink);font-weight:700}
+.rig-note b{color:var(--ink)}
 .rig-note .tight{color:var(--accent)}
 
-/* ---------- turn plate ---------- */
-.plate{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
-.who{display:flex;flex-direction:column;gap:2px;min-width:0}
-.who-name{
-  font:400 clamp(26px,8vw,34px)/1 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
-  text-transform:uppercase;letter-spacing:.01em;
-  overflow-wrap:anywhere;
+/* ---------- turn bar ---------- */
+.turnbar{
+  display:flex;align-items:center;gap:13px;
+  background:var(--panel-2);border:var(--edge) solid var(--ink);border-radius:16px;padding:12px 14px;
 }
-.order{
-  display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;
-  font:700 10px/1 "Space Mono",ui-monospace,monospace;letter-spacing:.06em;
+.turnbar.mine{background:var(--accent-soft);border-color:var(--accent)}
+.turnbar p{margin:0;font-size:14.5px;line-height:1.35;min-width:0}
+.turnbar b{
+  display:block;font:400 17px/1.15 Bungee,Impact,sans-serif;
+  overflow-wrap:anywhere;margin-bottom:2px;
 }
+.turnbar.mine b{color:var(--accent)}
+.pulse{display:none}
+
+/* ---------- order pips ---------- */
+.order{display:flex;gap:6px;flex-wrap:wrap;font:700 11px/1 Nunito,system-ui,sans-serif}
 .order span{
-  padding:5px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);
-  text-transform:uppercase;max-width:11ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  padding:6px 9px;border-radius:999px;border:2px solid var(--line);color:var(--muted);
+  max-width:15ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .order span.on{background:var(--ink);border-color:var(--ink);color:var(--ground)}
 
+/* ---------- the stake ---------- */
 .stake{
-  display:flex;gap:9px;align-items:flex-start;
-  border-left:3px solid var(--accent);background:var(--accent-soft);
-  padding:10px 12px;border-radius:0 8px 8px 0;
+  display:flex;gap:10px;align-items:flex-start;
+  background:var(--lemon);border:var(--edge) solid var(--ink);border-radius:14px;
+  padding:11px 13px;transform:rotate(-1.1deg);color:#241C2E;
 }
-.stake p{margin:0;font-size:14px;line-height:1.4}
-.stake .label{display:block;margin-bottom:3px}
+.stake p{margin:0;font-size:14.5px;line-height:1.4}
+.stake b{font-weight:800}
+.stake .label{display:block;margin-bottom:3px;color:var(--lemon-ink)}
 
 /* ---------- guess deck ---------- */
 .deck{display:flex;gap:10px}
-.deck input{flex:1 1 auto;font-size:22px;text-align:center;padding:14px 12px}
-.deck .btn{flex:0 0 auto;padding-inline:22px}
-.code{
-  width:100%;font:400 12px/1.45 "Space Mono",ui-monospace,Menlo,monospace;
-  color:var(--ink);background:var(--ground);border:1px solid var(--line);
-  border-radius:8px;padding:10px;resize:vertical;word-break:break-all;
-}
+.deck input{flex:1 1 auto;min-width:0;font-size:22px;text-align:center;padding:13px}
+.deck .btn{flex:0 0 auto;padding-inline:20px}
 .err{
-  margin:0;color:var(--accent);font:500 13.5px/1.4 "Archivo",system-ui,sans-serif;
+  margin:0;color:var(--accent);font:800 13.5px/1.4 Nunito,system-ui,sans-serif;
   display:flex;gap:7px;align-items:baseline;
 }
-.err::before{content:"!";font-family:"Space Mono",monospace;font-weight:700}
+.err::before{content:"!";font-family:"Space Mono",monospace}
 
-/* ---------- cut log ---------- */
-.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.code{
+  width:100%;font:400 12px/1.45 "Space Mono",ui-monospace,Menlo,monospace;
+  color:var(--ink);background:var(--panel-2);border:var(--edge) solid var(--ink);
+  border-radius:13px;padding:10px;resize:vertical;word-break:break-all;
+}
+
+/* ---------- the evidence ---------- */
+.log{list-style:none;margin:0;padding:0}
 .log li{
   display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:baseline;
-  padding:9px 0;border-top:1px solid var(--line);
-  font:400 13px/1.35 "Space Mono",ui-monospace,Menlo,monospace;
-  font-variant-numeric:tabular-nums;
+  padding:11px 0;border-top:2px dashed var(--line);
 }
 .log li:first-child{border-top:0}
-.log .n{color:var(--muted);font-size:11px}
-.log .nm{color:var(--ink);font-family:"Archivo",system-ui,sans-serif;font-weight:600;font-size:14px;overflow-wrap:anywhere}
-.log .mv{color:var(--muted);text-align:right;white-space:nowrap}
+.log .n{font:700 11px/1 "Space Mono",ui-monospace,monospace;color:var(--muted);font-variant-numeric:tabular-nums}
+.log .nm{font-weight:800;font-size:15px;overflow-wrap:anywhere}
+.log .mv{
+  font:700 12px/1.3 "Space Mono",ui-monospace,monospace;text-align:right;white-space:nowrap;
+  color:var(--muted);
+}
 .log .mv.up{color:var(--safe)}
-.log .mv.dn{color:var(--fuse)}
-.log .mv.bx{color:var(--accent);font-weight:700}
+.log .mv.dn{color:var(--grape)}
+.log .mv.bx{color:var(--accent)}
 .log .msg{
-  grid-column:2 / -1;margin-top:4px;
-  font:400 13px/1.4 "Archivo",system-ui,sans-serif;
+  grid-column:2 / -1;margin-top:4px;font-size:13.5px;font-style:italic;
   color:var(--muted);overflow-wrap:anywhere;
 }
-/* Quotes as pseudo-elements so the text itself stays plain textContent. */
 .log .msg::before{content:"\201C"}
 .log .msg::after{content:"\201D"}
-.log-empty{margin:0;color:var(--muted);font-size:13.5px}
+.log-empty{margin:0;color:var(--muted);font-size:13.5px;font-weight:600}
 
-/* ---------- relay handoff ---------- */
+/* ---------- relay verdict ---------- */
 .verdict{
-  font:400 clamp(24px,7vw,32px)/1.05 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
-  text-transform:uppercase;margin:0;text-wrap:balance;
+  font:400 clamp(21px,6.4vw,27px)/1.1 Bungee,Impact,sans-serif;margin:0;text-wrap:balance;
 }
 .verdict.up{color:var(--safe)}
-.verdict.dn{color:var(--fuse)}
+.verdict.dn{color:var(--grape)}
 
 /* ---------- game over ---------- */
-.boom-card{border-color:var(--accent)}
+.boom-card{border-color:var(--accent);box-shadow:4px 4px 0 var(--accent)}
 .boom{
-  font:400 clamp(58px,20vw,104px)/.82 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
-  text-transform:uppercase;color:var(--accent);margin:0;letter-spacing:.01em;
+  font:400 clamp(52px,17vw,88px)/.85 Bungee,Impact,"Arial Black",sans-serif;
+  color:var(--accent);margin:0;
 }
 .reveal{display:flex;gap:10px;flex-wrap:wrap}
 .reveal div{
-  flex:1 1 120px;border:1px solid var(--line);border-radius:8px;padding:11px 12px;
-  display:flex;flex-direction:column;gap:4px;min-width:0;
+  flex:1 1 130px;min-width:0;border:var(--edge) solid var(--ink);border-radius:14px;
+  padding:11px 13px;display:flex;flex-direction:column;gap:3px;background:var(--panel-2);
 }
 .reveal b{
-  font:400 30px/1 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;font-variant-numeric:tabular-nums;
-  overflow-wrap:anywhere;
+  font:400 32px/1 Bungee,Impact,sans-serif;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
 }
 .reveal .accent{color:var(--accent)}
+
+/* ---------- home choices ---------- */
+.big-choice{display:flex;flex-direction:column;gap:11px}
+.choice{
+  display:flex;gap:13px;align-items:flex-start;text-align:left;width:100%;
+  border:var(--edge) solid var(--ink);border-radius:16px;background:var(--panel-2);
+  box-shadow:var(--drop-sm);padding:15px;cursor:pointer;color:var(--ink);
+  transition:transform .1s ease, box-shadow .1s ease;
+}
+.choice:hover{border-color:var(--accent)}
+.choice:active{transform:translate(3px,3px);box-shadow:0 0 0}
+.choice:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
+.choice strong{
+  display:block;font:400 18px/1.05 Bungee,Impact,sans-serif;margin-bottom:4px;
+}
+.choice span{display:block;color:var(--muted);font-size:13.5px;line-height:1.4;font-weight:600}
+.choice em{
+  flex:0 0 auto;font-style:normal;width:34px;text-align:center;color:var(--accent);
+  font:400 25px/1 Bungee,Impact,sans-serif;
+}
+
+/* ---------- lobby ---------- */
+.roomcode{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  border:3px dashed var(--line);border-radius:16px;padding:13px 15px;
+}
+.roomcode b{
+  font:400 clamp(30px,10vw,40px)/.9 Bungee,Impact,sans-serif;
+  letter-spacing:.1em;color:var(--accent);font-variant-numeric:tabular-nums;
+}
+#joinCode{
+  text-align:center;letter-spacing:.3em;text-transform:uppercase;
+  font-family:"Space Mono",ui-monospace,monospace;font-size:24px;padding:14px 12px;
+}
+.seats{list-style:none;margin:0;padding:0}
+.seats li{
+  display:flex;align-items:center;gap:10px;padding:11px 0;
+  border-top:2px dashed var(--line);font-size:15px;
+}
+.seats li:first-child{border-top:0}
+.seats .dot{
+  flex:0 0 auto;width:11px;height:11px;border-radius:50%;
+  background:var(--safe);border:2px solid var(--ink);
+}
+.seats .nm{font-weight:800;overflow-wrap:anywhere}
+.seats .tag{
+  margin-left:auto;font:700 10px/1 "Space Mono",ui-monospace,monospace;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+}
+.seats .tag.you{color:var(--accent)}
+
+/* ---------- notes ---------- */
+.offline-note{
+  display:flex;gap:9px;align-items:flex-start;
+  border:2px dashed var(--line);border-radius:13px;padding:10px 12px;background:transparent;
+}
+.offline-note p{margin:0;font-size:13px;line-height:1.45;color:var(--muted);font-weight:600}
+.awaynote{
+  margin:0;padding:10px 12px;border-radius:13px;
+  background:var(--panel-2);border:2px solid var(--ink);
+  font:700 13px/1.45 "Space Mono",ui-monospace,Menlo,monospace;color:var(--muted);
+}
+.awaynote b{color:var(--ink)}
+.awaynote .up{color:var(--safe)}
+
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 #fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
 
@@ -319,100 +409,21 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
   30%,50%,70%{transform:translateX(-7px)}
   40%,60%{transform:translateX(7px)}
 }
-.pop{animation:pop .45s cubic-bezier(.2,1.5,.4,1) both}
-@keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.pop{animation:pop .42s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes pop{from{transform:scale(.72);opacity:0}to{transform:scale(1);opacity:1}}
 
 .foot{
-  font:400 12px/1.5 "Space Mono",ui-monospace,Menlo,monospace;
+  font:700 12px/1.5 "Space Mono",ui-monospace,Menlo,monospace;
   color:var(--muted);text-align:center;margin:0;
 }
 .foot a{color:var(--muted)}
 
 @media (prefers-reduced-motion: reduce){
-  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+  *,*::before,*::after{
+    animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
 }
-
-/* ---------- online: lobby, seats, turn prompt ---------- */
-.big-choice{display:flex;flex-direction:column;gap:10px}
-.choice{
-  display:flex;gap:13px;align-items:flex-start;text-align:left;width:100%;
-  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2);
-  padding:15px;cursor:pointer;color:var(--ink);transition:border-color .14s ease;
-}
-.choice:hover{border-color:var(--accent)}
-.choice strong{
-  display:block;font:400 19px/1.05 "Anton",Impact,"Arial Narrow Bold",sans-serif;
-  text-transform:uppercase;letter-spacing:.01em;margin-bottom:3px;
-}
-.choice span{display:block;color:var(--muted);font-size:13.5px;line-height:1.4}
-.choice em{
-  flex:0 0 auto;font-style:normal;font:400 26px/1 "Anton",Impact,sans-serif;color:var(--accent);
-  width:34px;text-align:center;
-}
-
-.roomcode{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  border:1px dashed var(--line);border-radius:var(--radius);padding:13px 15px;
-}
-.roomcode b{
-  font:400 clamp(32px,11vw,44px)/.9 "Anton",Impact,"Arial Narrow Bold",sans-serif;
-  letter-spacing:.14em;color:var(--accent);font-variant-numeric:tabular-nums;
-}
-#joinCode{
-  text-align:center;letter-spacing:.32em;text-transform:uppercase;
-  font-family:"Space Mono",ui-monospace,monospace;font-size:24px;padding:14px 12px;
-}
-
-.seats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
-.seats li{
-  display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line);
-  font-size:15px;
-}
-.seats li:first-child{border-top:0}
-.seats .dot{
-  flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--safe);
-  box-shadow:0 0 0 3px color-mix(in srgb,var(--safe) 22%, transparent);
-}
-.seats .nm{font-weight:600;overflow-wrap:anywhere}
-.seats .tag{
-  margin-left:auto;font:700 10px/1 "Space Mono",ui-monospace,monospace;
-  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
-}
-.seats .tag.you{color:var(--accent)}
-
-.turnbar{
-  display:flex;align-items:center;gap:12px;
-  border-radius:var(--radius);padding:14px 15px;
-  border:1px solid var(--line);background:var(--panel-2);
-}
-.turnbar.mine{border-color:var(--accent);background:var(--accent-soft)}
-.turnbar .pulse{
-  flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--muted);
-}
-.turnbar.mine .pulse{background:var(--accent);animation:pulse 1.5s ease-in-out infinite}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 60%, transparent)}
-  50%{box-shadow:0 0 0 9px transparent}}
-.turnbar p{margin:0;font-size:14.5px;line-height:1.35}
-.turnbar b{
-  display:block;font:400 21px/1.05 "Anton",Impact,"Arial Narrow Bold",sans-serif;
-  text-transform:uppercase;letter-spacing:.01em;
-}
-.turnbar.mine b{color:var(--accent)}
-
-.offline-note{
-  display:flex;gap:9px;align-items:flex-start;border:1px solid var(--line);
-  border-radius:8px;padding:10px 12px;background:var(--panel-2);
-}
-.offline-note p{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
-.awaynote{
-  margin:0;padding:10px 12px;border-radius:8px;
-  background:var(--panel-2);border:1px solid var(--line);
-  font:400 13px/1.45 "Space Mono",ui-monospace,Menlo,monospace;color:var(--muted);
-}
-.awaynote b{color:var(--ink);font-weight:700}
-.awaynote .up{color:var(--safe)}
-.spin{display:inline-block;animation:spin 1s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -537,7 +548,7 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
     </div>
 
     <div class="stake">
-      <div><span class="label">On the line</span><p>Loser <b id="lobbyStake">&mdash;</b></p></div>
+      <div><span class="label">If you pop it</span><p>Loser <b id="lobbyStake">&mdash;</b></p></div>
     </div>
 
     <p class="err" id="lobbyErr" hidden></p>
@@ -609,7 +620,28 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
   <!-- ============ PLAY ============ -->
   <section id="screenPlay" class="panel" hidden aria-labelledby="turnName">
     <div class="turnbar" id="turnBar">
-      <span class="pulse"></span>
+      <span class="mascot" id="mascot" data-mood="calm" aria-hidden="true">
+        <svg viewBox="-6 -8 74 74">
+          <path class="m-fuse" d="M31 12 C34 4, 44 6, 46 2"/>
+          <circle class="m-spark" cx="47" cy="2.5" r="4.5"/>
+          <rect class="m-body" x="25" y="11" width="12" height="8" rx="2"/>
+          <circle class="m-body" cx="31" cy="37" r="21"/>
+          <circle class="m-eye" cx="24" cy="34" r="6.4"/>
+          <circle class="m-eye" cx="38" cy="34" r="6.4"/>
+          <circle class="m-pupil" cx="25.5" cy="35.5" r="3.2"/>
+          <circle class="m-pupil" cx="39.5" cy="35.5" r="3.2"/>
+          <path class="m-x" d="M20.5 30.5 l7 7 M27.5 30.5 l-7 7"/>
+          <path class="m-x" d="M34.5 30.5 l7 7 M41.5 30.5 l-7 7"/>
+          <path class="m-brow" d="M18.5 25.5 l9 3.5"/>
+          <path class="m-brow" d="M43.5 25.5 l-9 3.5"/>
+          <path class="m-mouth m-m-calm" d="M26 46.5 h10"/>
+          <path class="m-mouth m-m-nervous" d="M25 47.5 q6 -4 12 0"/>
+          <path class="m-mouth m-m-worried" d="M25 48.5 q6 -6.5 12 0"/>
+          <circle class="m-mouth m-m-panic" cx="31" cy="47" r="4.6"/>
+          <path class="m-mouth m-m-dead" d="M25 48.5 q6 -6.5 12 0"/>
+          <path class="m-sweat" d="M50 29 q4.5 6.5 0 9.5 q-4.5 -3 0 -9.5z"/>
+        </svg>
+      </span>
       <p><b id="turnName">&mdash;</b><span id="turnSub">&nbsp;</span></p>
     </div>
 
@@ -617,8 +649,8 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 
     <div class="rig">
       <div class="bounds">
-        <div class="bound bound--low"><span class="label">Floor</span><span class="bound-num" id="lowNum">1</span></div>
-        <div class="bound bound--high"><span class="label">Ceiling</span><span class="bound-num" id="highNum">100</span></div>
+        <div class="bound bound--low"><span class="label">Safe floor</span><span class="bound-num" id="lowNum">1</span></div>
+        <div class="bound bound--high"><span class="label">Safe ceiling</span><span class="bound-num" id="highNum">100</span></div>
       </div>
       <div class="fuse" id="fuse" role="img" aria-label="Live range">
         <div class="fuse-track"></div>
@@ -632,7 +664,7 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
     <div class="order" id="orderPips" style="justify-content:flex-start"></div>
 
     <div class="stake">
-      <div><span class="label">On the line</span><p>Loser <b id="stakeText">&mdash;</b></p></div>
+      <div><span class="label">If you pop it</span><p>Loser <b id="stakeText">&mdash;</b></p></div>
     </div>
 
     <div id="guessBlock">
@@ -648,9 +680,9 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
     <p class="err" id="playErr" hidden></p>
 
     <div style="border-top:1px solid var(--line);padding-top:14px">
-      <span class="label" style="display:block;margin-bottom:9px">Cut log</span>
+      <span class="label" style="display:block;margin-bottom:9px">The evidence</span>
       <ul class="log" id="log"></ul>
-      <p class="log-empty" id="logEmpty">No cuts yet. First guess sets the tone.</p>
+      <p class="log-empty" id="logEmpty">Nothing yet. Somebody has to go first.</p>
     </div>
 
     <button class="btn btn--sm btn--ghost" id="abandon" type="button" style="align-self:flex-start">Leave this game</button>
@@ -677,7 +709,31 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 
   <!-- ============ GAME OVER ============ -->
   <section id="screenOver" class="panel boom-card" hidden aria-labelledby="boomHead">
-    <p class="boom" id="boomHead">Boom!</p>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span class="mascot" id="mascotOver" data-mood="calm" aria-hidden="true">
+        <svg viewBox="-6 -8 74 74">
+          <path class="m-fuse" d="M31 12 C34 4, 44 6, 46 2"/>
+          <circle class="m-spark" cx="47" cy="2.5" r="4.5"/>
+          <rect class="m-body" x="25" y="11" width="12" height="8" rx="2"/>
+          <circle class="m-body" cx="31" cy="37" r="21"/>
+          <circle class="m-eye" cx="24" cy="34" r="6.4"/>
+          <circle class="m-eye" cx="38" cy="34" r="6.4"/>
+          <circle class="m-pupil" cx="25.5" cy="35.5" r="3.2"/>
+          <circle class="m-pupil" cx="39.5" cy="35.5" r="3.2"/>
+          <path class="m-x" d="M20.5 30.5 l7 7 M27.5 30.5 l-7 7"/>
+          <path class="m-x" d="M34.5 30.5 l7 7 M41.5 30.5 l-7 7"/>
+          <path class="m-brow" d="M18.5 25.5 l9 3.5"/>
+          <path class="m-brow" d="M43.5 25.5 l-9 3.5"/>
+          <path class="m-mouth m-m-calm" d="M26 46.5 h10"/>
+          <path class="m-mouth m-m-nervous" d="M25 47.5 q6 -4 12 0"/>
+          <path class="m-mouth m-m-worried" d="M25 48.5 q6 -6.5 12 0"/>
+          <circle class="m-mouth m-m-panic" cx="31" cy="47" r="4.6"/>
+          <path class="m-mouth m-m-dead" d="M25 48.5 q6 -6.5 12 0"/>
+          <path class="m-sweat" d="M50 29 q4.5 6.5 0 9.5 q-4.5 -3 0 -9.5z"/>
+        </svg>
+      </span>
+      <p class="boom" id="boomHead">Boom!</p>
+    </div>
     <p style="margin:0;font-size:17px;line-height:1.4"><b id="loserName">&mdash;</b> <span id="loserVerb">cut the live wire.</span></p>
     <div class="reveal">
       <div><span class="label">The bomb was</span><b class="accent" id="secretReveal">&mdash;</b></div>
@@ -693,12 +749,12 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
     </div>
     <p class="hint" id="rematchWait" hidden>Waiting for the host to deal a rematch.</p>
     <div style="border-top:1px solid var(--line);padding-top:14px">
-      <span class="label" style="display:block;margin-bottom:9px">Full cut log</span>
+      <span class="label" style="display:block;margin-bottom:9px">The full evidence</span>
       <ul class="log" id="overLog"></ul>
     </div>
   </section>
 
-  <p class="foot" id="foot">Turn-based, no clock. Take an hour or a week &mdash; the game waits.</p>
+  <p class="foot" id="foot">No clock, no rush. The bomb is very patient.</p>
 </main>
 
 <script>
@@ -1261,6 +1317,19 @@ const ENGINE = (() => {
     })();
   }
 
+  /**
+   * The bomb's face is the danger gauge: the closer the range gets to closing,
+   * the worse he takes it. Same number the fuse draws, told twice.
+   */
+  function setMood(el, danger, over){
+    if (!el) return;
+    el.dataset.mood = over ? "dead"
+      : danger < 0.25 ? "calm"
+      : danger < 0.55 ? "nervous"
+      : danger < 0.85 ? "worried"
+      : "panic";
+  }
+
   // ---------- rendering the board ------------------------------------------
   const pct = n => { const span = S.state.hi0 - S.state.lo0; return span <= 0 ? 0 : ((n - S.state.lo0) / span) * 100; };
 
@@ -1304,21 +1373,28 @@ const ENGINE = (() => {
     bar.className = "turnbar" + (mine && S.online ? " mine" : "");
     if (S.online && mine){
       $("turnName").textContent = "Your turn";
-      $("turnSub").textContent = `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
+      $("turnSub").textContent = (st.lo + 2 === st.hi
+        ? `Only ${st.lo + 1} is left. We both know how this ends.`
+        : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`);
     } else if (S.online){
       $("turnName").textContent = `${st.players[st.turn]} is up`;
       $("turnSub").textContent = mySeatIndex() < 0
-        ? "You set the bomb, so you are refereeing — you never get a turn."
-        : "This page updates the moment they play. You can close it.";
+        ? "You set the bomb. You just have to watch, like a parent at sports day."
+        : "Updates the second they move. Go and do something else.";
     } else {
       $("turnName").textContent = st.players[st.turn];
-      $("turnSub").textContent = `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
+      $("turnSub").textContent = (st.lo + 2 === st.hi
+        ? `Only ${st.lo + 1} is left. We both know how this ends.`
+        : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`);
     }
 
     const liveEl = $("liveCount");
-    liveEl.textContent = left === 1 ? "1 number left — it IS the bomb" : `${left} numbers still live`;
+    liveEl.textContent = left === 1 ? "1 number left. It is the bomb." : `${left} won't kill you`;
     liveEl.className = left <= 3 ? "tight" : "";
-    $("cutCount").textContent = `${cut} cut away`;
+    $("cutCount").textContent = `${cut} already ruled out`;
+
+    const span = Math.max(1, st.hi0 - st.lo0 - 1);
+    setMood($("mascot"), cut / span, false);
 
     const a = pct(st.lo), b = pct(st.hi);
     $("fuseLive").style.left = a + "%";
@@ -1375,7 +1451,7 @@ const ENGINE = (() => {
     const st = S.state, loser = st.players[st.loser];
     const mine = S.online && (st.seats || [])[st.loser] === seatId;
     $("loserName").textContent = mine ? "You" : loser;
-    $("loserVerb").textContent = mine ? "cut the live wire." : "cut the live wire.";
+    $("loserVerb").textContent = "popped it. Everyone saw.";
     $("secretReveal").textContent = st.secret;
     $("turnsSurvived").textContent = st.history.length - 1;
     $("overPenalty").textContent = loser;
@@ -1384,6 +1460,7 @@ const ENGINE = (() => {
     $("rematch").hidden = S.online && !S.isHost;
     $("rematchWait").hidden = !(S.online && !S.isHost);
     $("newGame").textContent = S.online ? "Leave the room" : "Back to the start";
+    setMood($("mascotOver"), 1, true);
     renderLog($("overLog"));
     setStatus({ mine: false, waitingFor: null, over: true });
     flashTitle(false);
