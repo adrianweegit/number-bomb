@@ -274,6 +274,13 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .deck{display:flex;gap:10px}
 .deck input{flex:1 1 auto;min-width:0;font-size:22px;text-align:center;padding:13px}
 .deck .btn{flex:0 0 auto;padding-inline:20px}
+.odds{
+  margin:8px 0 0;font:700 12.5px/1.45 "Space Mono",ui-monospace,Menlo,monospace;
+  color:var(--muted);
+}
+.odds #oddsFutures{display:block;margin-top:2px}
+.odds:empty{display:none}
+
 .err{
   margin:0;color:var(--accent);font:800 13.5px/1.4 Nunito,system-ui,sans-serif;
   display:flex;gap:7px;align-items:baseline;
@@ -673,6 +680,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
         <input type="number" id="guess" inputmode="numeric" autocomplete="off" placeholder="&mdash;">
         <button class="btn btn--primary" id="guessBtn" type="button">Guess</button>
       </div>
+      <p class="odds" id="oddsLine" aria-live="polite"><span id="oddsMain"></span><span id="oddsFutures"></span></p>
       <input type="text" id="sayIt" maxlength="80" autocomplete="off" style="margin-top:9px"
              placeholder="Trash talk (optional)" aria-label="Optional message with your guess">
     </div>
@@ -1394,7 +1402,9 @@ const ENGINE = (() => {
     $("cutCount").textContent = `${cut} already ruled out`;
 
     const span = Math.max(1, st.hi0 - st.lo0 - 1);
-    setMood($("mascot"), cut / span, false);
+    // One legal number left is maximum danger even when little of the range
+    // has been cut away, which a small opening range can otherwise mask.
+    setMood($("mascot"), left === 1 ? 1 : cut / span, false);
 
     const a = pct(st.lo), b = pct(st.hi);
     $("fuseLive").style.left = a + "%";
@@ -1441,6 +1451,8 @@ const ENGINE = (() => {
     }
 
     setStatus({ mine: S.online && mine, waitingFor: S.online && !mine ? st.players[st.turn] : null, over: false });
+
+    renderOdds();
 
     renderLog($("log"));
     $("logEmpty").hidden = st.history.length > 0;
@@ -1785,6 +1797,52 @@ const ENGINE = (() => {
     renderPlay(); show("Play"); $("guess").focus();
   }
 
+  /**
+   * The odds preview. Everything here is derived from the live range and what
+   * is currently typed — nothing is submitted and no state is touched. The
+   * count comes from remaining(), never from hi - lo, or the "1 in 1" and
+   * "one number left" cases both fire a turn late.
+   */
+  function renderOdds(){
+    const st = S.state;
+    const main = $("oddsMain"), futures = $("oddsFutures");
+    if (!st || st.over){ main.textContent = ""; futures.textContent = ""; return; }
+
+    const left = ENGINE.remaining(st);
+    const floorGuess = st.lo + 1, ceilGuess = st.hi - 1;
+
+    // A single legal number is a property of the range, not of the input, so
+    // it outranks every other state.
+    if (left === 1){
+      main.textContent = "One number left. This is it.";
+      futures.textContent = "";
+      return;
+    }
+
+    const typed = $("guess").value.trim();
+    if (!typed){
+      main.textContent = `${floorGuess}–${ceilGuess}. Anything else hits the wall.`;
+      futures.textContent = "";
+      return;
+    }
+
+    const g = Number(typed);
+    if (Number.isInteger(g) && (g === st.lo || g === st.hi)){
+      main.textContent = `${g} is the wall. Doesn't count, doesn't cost you.`;
+      futures.textContent = "";
+      return;
+    }
+    if (!Number.isInteger(g) || g < floorGuess || g > ceilGuess){
+      main.textContent = `Out of range. ${floorGuess}–${ceilGuess} only.`;
+      futures.textContent = "";
+      return;
+    }
+
+    main.textContent = `1 in ${left} it's the bomb.`;
+    // Both futures, applied without touching state.
+    futures.textContent = `Too low → ${g}–${st.hi} · Too high → ${st.lo}–${g}`;
+  }
+
   // ---------- turns ---------------------------------------------------------
   async function submitGuess(){
     const check = ENGINE.validateGuess(S.state, $("guess").value);
@@ -2041,7 +2099,7 @@ const ENGINE = (() => {
   $("guessBtn").addEventListener("click", submitGuess);
   $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
   $("sayIt").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
-  $("guess").addEventListener("input", () => err("playErr", ""));
+  $("guess").addEventListener("input", () => { err("playErr", ""); renderOdds(); });
   $("abandon").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });
 
   $("relaySend").addEventListener("click", e => openWhatsApp(turnMessage(), e.currentTarget));
