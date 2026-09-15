@@ -1,0 +1,34 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The Firestore emulator is a Java process.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm install
+
+      # Rules of the game: no network, no dependencies.
+      - name: Engine tests
+        run: npm run test:engine
+
+      # Security rules, against the real Firestore emulator. These guard a
+      # database anyone with the link can reach, so they gate every push.
+      - name: Security rule tests
+        run: npm run test:rules

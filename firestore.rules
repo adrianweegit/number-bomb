@@ -1,0 +1,153 @@
+rules_version = '2';
+
+// Number Bomb — Cloud Firestore security rules.
+//
+// Threat model: a public party game. Anyone with the link signs in
+// anonymously and can open or join a room, so these rules are not about
+// keeping strangers out. They stop a player bending the game: moving out of
+// turn, guessing outside the live range, shifting the bounds the wrong way,
+// editing the roster mid-game, or rewriting the log.
+//
+// They deliberately do NOT hide the bomb. Every client has to compare its own
+// guess against it, and rules can validate a write but never compute one, so
+// adjudicating a guess server-side needs Cloud Functions. The bomb is stored
+// scrambled, never as a plain number. See FIREBASE-SETUP.md, "Hardening".
+//
+// COST: rules are capped at 1000 expression evaluations per request, and a
+// function call is re-evaluated at every use. Everything below binds its
+// values once with `let` and compares fields inline — a rewrite that
+// reintroduces helper functions per field will pass small tests and then
+// start denying legitimate moves deep into a long game.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /rooms/{roomId} {
+
+      // Any signed-in player can watch a room. That is the whole point.
+      allow read: if request.auth != null;
+
+      allow create: if request.auth != null
+        && roomId.matches('^[A-Z0-9]{4}$')
+        && newRoom(roomId);
+
+      allow update: if request.auth != null
+        && resource != null
+        && (isStart() || isMove() || isRematch());
+
+      allow delete: if request.auth != null
+        && resource != null
+        && resource.data.hostId == request.auth.uid;
+
+      function newRoom(id) {
+        let n = request.resource.data;
+        return n.v == 2
+          && n.code == id
+          && n.hostId == request.auth.uid
+          && n.mode == 'online'
+          && n.phase == 'lobby'
+          && n.lo0 is int && n.hi0 is int
+          && n.hi0 - n.lo0 >= 2
+          && n.lo == n.lo0 && n.hi == n.hi0
+          && n.bomb is string && n.bomb.size() > 0 && n.bomb.size() <= 256
+          && n.penalty is string && n.penalty.size() > 0 && n.penalty.size() <= 120
+          && n.players.size() == 0 && n.seats.size() == 0
+          && n.turn == 0 && n.history.size() == 0
+          && n.over == false && n.loser == null;
+      }
+
+      // --- starting: host only, freezes the roster and the turn order ------
+      function isStart() {
+        let p = resource.data;
+        let n = request.resource.data;
+        return p.phase == 'lobby'
+          && p.hostId == request.auth.uid
+          && n.phase == 'playing'
+          && n.v == p.v && n.code == p.code && n.hostId == p.hostId
+          && n.lo0 == p.lo0 && n.hi0 == p.hi0 && n.mode == p.mode
+          && n.bomb == p.bomb && n.penalty == p.penalty
+          && n.seats.size() >= 2 && n.seats.size() <= 10
+          && n.players.size() == n.seats.size()
+          && n.lo == p.lo0 && n.hi == p.hi0
+          && n.turn == 0
+          && n.history.size() == 0
+          && n.over == false && n.loser == null;
+      }
+
+      // --- a turn: only the player the room says is up ---------------------
+      function isMove() {
+        let p = resource.data;
+        let n = request.resource.data;
+        let i = p.history.size();
+        let e = n.history[i];
+        let up = (p.turn + 1) % p.seats.size();
+        return p.phase == 'playing'
+          && p.over == false
+          && p.seats.size() > 1
+          && p.seats[p.turn] == request.auth.uid
+          // nothing structural may shift on a turn
+          && n.v == p.v && n.code == p.code && n.hostId == p.hostId
+          && n.lo0 == p.lo0 && n.hi0 == p.hi0 && n.mode == p.mode
+          && n.bomb == p.bomb && n.penalty == p.penalty && n.phase == p.phase
+          && n.seats == p.seats && n.players == p.players
+          // append-only: the new log is exactly the old log plus this move
+          && n.history.size() == i + 1
+          && n.history == p.history.concat([e])
+          && e.p == p.turn
+          && e.g is int
+          // bounds are exclusive, which is what makes the range always shrink
+          && e.g > p.lo && e.g < p.hi
+          && (
+               // too low: the floor rises to the guess
+               (e.side == 'low' && n.lo == e.g && n.hi == p.hi
+                 && n.over == false && n.loser == null && n.turn == up)
+               ||
+               // too high: the ceiling drops to the guess
+               (e.side == 'high' && n.hi == e.g && n.lo == p.lo
+                 && n.over == false && n.loser == null && n.turn == up)
+               ||
+               // detonation: bounds freeze, the guesser is pinned as loser
+               (e.side == 'boom' && n.over == true && n.loser == p.turn
+                 && n.lo == p.lo && n.hi == p.hi && n.turn == p.turn)
+             );
+      }
+
+      // --- rematch: host only, same crew, fresh bomb, empty log ------------
+      function isRematch() {
+        let p = resource.data;
+        let n = request.resource.data;
+        return p.phase == 'playing'
+          && p.over == true
+          && p.hostId == request.auth.uid
+          && n.v == p.v && n.code == p.code && n.hostId == p.hostId
+          && n.lo0 == p.lo0 && n.hi0 == p.hi0 && n.mode == p.mode
+          && n.penalty == p.penalty
+          && n.seats == p.seats && n.players == p.players
+          && n.phase == 'playing'
+          && n.lo == p.lo0 && n.hi == p.hi0
+          && n.history.size() == 0
+          && n.over == false && n.loser == null
+          && n.turn is int && n.turn >= 0 && n.turn < p.seats.size()
+          && n.bomb is string && n.bomb.size() > 0 && n.bomb.size() <= 256;
+      }
+
+      // --- seats: you write your own chair, and only in the lobby ----------
+      match /seats/{seatId} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null
+          && seatId == request.auth.uid
+          && get(/databases/$(database)/documents/rooms/$(roomId)).data.phase == 'lobby'
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 18
+          && request.resource.data.joinedAt is number;
+        allow delete: if request.auth != null && seatId == request.auth.uid;
+      }
+    }
+
+    // Nothing else in this database is reachable.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

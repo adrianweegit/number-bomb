@@ -1,0 +1,1826 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Number Bomb</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* ---------- tokens: light is the bare :root, dark redefines ---------- */
+:root{
+  --ground:#EFEBE4;
+  --panel:#F8F5F0;
+  --panel-2:#E7E1D7;
+  --ink:#221C17;
+  --muted:#6E6459;
+  --line:#D9D2C7;
+  --accent:#D93A1F;
+  --accent-soft:#F6DED8;
+  --fuse:#E09512;
+  --fuse-dim:#C9821020;
+  --safe:#2F7A66;
+  --shadow:0 1px 0 rgba(34,28,23,.06), 0 10px 28px -18px rgba(34,28,23,.5);
+  --radius:10px;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#17130F;
+    --panel:#211B16;
+    --panel-2:#2B231C;
+    --ink:#F2EBE1;
+    --muted:#9A8E80;
+    --line:#372E26;
+    --accent:#FF5333;
+    --accent-soft:#3A1A12;
+    --fuse:#F5A623;
+    --fuse-dim:#F5A62318;
+    --safe:#4FA98F;
+    --shadow:0 1px 0 rgba(0,0,0,.4), 0 14px 34px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#17130F;
+  --panel:#211B16;
+  --panel-2:#2B231C;
+  --ink:#F2EBE1;
+  --muted:#9A8E80;
+  --line:#372E26;
+  --accent:#FF5333;
+  --accent-soft:#3A1A12;
+  --fuse:#F5A623;
+  --fuse-dim:#F5A62318;
+  --safe:#4FA98F;
+  --shadow:0 1px 0 rgba(0,0,0,.4), 0 14px 34px -20px rgba(0,0,0,.9);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font:400 16px/1.5 "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img{max-width:100%}
+[hidden]{display:none !important}
+
+.wrap{
+  width:100%;
+  max-width:560px;
+  margin:0 auto;
+  padding-inline:18px;
+  padding-block:22px 40px;
+  display:flex;
+  flex-direction:column;
+  gap:22px;
+}
+
+/* ---------- masthead ---------- */
+.mast{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.mast h1{
+  font:400 clamp(34px,10vw,46px)/.9 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
+  letter-spacing:.01em;text-transform:uppercase;margin:0;text-wrap:balance;
+}
+.mast h1 em{font-style:normal;color:var(--accent)}
+.stencil{
+  font:700 10px/1 "Space Mono",ui-monospace,Menlo,monospace;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+  border:1px solid var(--line);border-radius:3px;padding:5px 7px;white-space:nowrap;
+}
+
+/* ---------- generic panel ---------- */
+.panel{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:18px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.label{
+  font:700 10px/1 "Space Mono",ui-monospace,Menlo,monospace;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+}
+.hint{margin:0;color:var(--muted);font-size:13.5px;line-height:1.45}
+
+/* ---------- form controls ---------- */
+input[type="text"],input[type="number"],input[type="password"]{
+  width:100%;font:500 16px/1.2 "Archivo",system-ui,sans-serif;
+  color:var(--ink);background:var(--ground);
+  border:1px solid var(--line);border-radius:8px;padding:11px 12px;
+  -webkit-appearance:none;appearance:none;
+}
+input[type="number"]{font-family:"Space Mono",ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+input[type="number"]{-moz-appearance:textfield}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input::placeholder{color:var(--muted);opacity:.75}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.btn{
+  font:600 15px/1 "Archivo",system-ui,sans-serif;
+  border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--ink);
+  padding:13px 16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  text-decoration:none;transition:transform .12s ease, filter .12s ease;
+}
+.btn:active{transform:translateY(1px)}
+.btn--primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn--wa{background:#1F8F4E;border-color:#1F8F4E;color:#fff}
+.btn--ghost{background:transparent}
+.btn--wide{width:100%}
+.btn--sm{padding:9px 12px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- player roster ---------- */
+.roster{display:flex;flex-direction:column;gap:8px}
+.slot{display:flex;align-items:center;gap:9px}
+.slot-no{
+  flex:0 0 26px;text-align:center;
+  font:700 12px/1 "Space Mono",ui-monospace,monospace;color:var(--muted);
+  font-variant-numeric:tabular-nums;
+}
+.slot .x{
+  flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--muted);
+  border-radius:8px;width:38px;height:40px;cursor:pointer;font-size:17px;line-height:1;
+}
+.slot .x:hover{color:var(--accent);border-color:var(--accent)}
+
+/* ---------- segmented ---------- */
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{
+  flex:1;border:0;background:transparent;color:var(--muted);cursor:pointer;
+  padding:11px 8px;font:600 13px/1.25 "Archivo",system-ui,sans-serif;
+}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+.row2{display:flex;gap:10px;flex-wrap:wrap}
+.row2>*{flex:1 1 130px;min-width:0}
+.field{display:flex;flex-direction:column;gap:6px}
+
+/* ---------- penalty chips ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{
+  border:1px dashed var(--line);background:transparent;color:var(--muted);
+  border-radius:999px;padding:7px 12px;cursor:pointer;
+  font:500 13px/1 "Archivo",system-ui,sans-serif;
+}
+.chip:hover{border-style:solid;border-color:var(--accent);color:var(--accent)}
+
+/* ---------- the rig: bounds + fuse ---------- */
+.rig{display:flex;flex-direction:column;gap:12px}
+.bounds{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.bound{display:flex;flex-direction:column;gap:3px}
+.bound--high{text-align:right}
+.bound-num{
+  font:400 clamp(40px,14vw,58px)/.85 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
+  font-variant-numeric:tabular-nums;letter-spacing:.01em;
+}
+
+.fuse{position:relative;height:30px;display:flex;align-items:center}
+.fuse-track{
+  position:absolute;inset:11px 0;border-radius:4px;
+  background:
+    repeating-linear-gradient(115deg,var(--line) 0 5px,transparent 5px 11px),
+    var(--panel-2);
+  border:1px solid var(--line);
+}
+.fuse-live{
+  position:absolute;top:8px;bottom:8px;left:0;width:100%;
+  border-radius:4px;
+  background:linear-gradient(180deg,var(--fuse),color-mix(in srgb,var(--fuse) 72%, #000 28%));
+  box-shadow:0 0 0 1px var(--fuse-dim), 0 0 16px -2px var(--fuse);
+  transition:left .42s cubic-bezier(.2,.9,.25,1), width .42s cubic-bezier(.2,.9,.25,1);
+}
+.fuse-clamp{
+  position:absolute;top:0;bottom:0;width:3px;background:var(--ink);border-radius:2px;
+  transition:left .42s cubic-bezier(.2,.9,.25,1);
+}
+.fuse-clamp::after{
+  content:"";position:absolute;left:50%;top:-1px;width:11px;height:7px;
+  transform:translateX(-50%);background:var(--ink);border-radius:2px;
+}
+.rig-note{
+  margin:0;font:400 12.5px/1.3 "Space Mono",ui-monospace,Menlo,monospace;
+  color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;
+}
+.rig-note b{color:var(--ink);font-weight:700}
+.rig-note .tight{color:var(--accent)}
+
+/* ---------- turn plate ---------- */
+.plate{display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.who{display:flex;flex-direction:column;gap:2px;min-width:0}
+.who-name{
+  font:400 clamp(26px,8vw,34px)/1 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
+  text-transform:uppercase;letter-spacing:.01em;
+  overflow-wrap:anywhere;
+}
+.order{
+  display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;
+  font:700 10px/1 "Space Mono",ui-monospace,monospace;letter-spacing:.06em;
+}
+.order span{
+  padding:5px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);
+  text-transform:uppercase;max-width:11ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.order span.on{background:var(--ink);border-color:var(--ink);color:var(--ground)}
+
+.stake{
+  display:flex;gap:9px;align-items:flex-start;
+  border-left:3px solid var(--accent);background:var(--accent-soft);
+  padding:10px 12px;border-radius:0 8px 8px 0;
+}
+.stake p{margin:0;font-size:14px;line-height:1.4}
+.stake .label{display:block;margin-bottom:3px}
+
+/* ---------- guess deck ---------- */
+.deck{display:flex;gap:10px}
+.deck input{flex:1 1 auto;font-size:22px;text-align:center;padding:14px 12px}
+.deck .btn{flex:0 0 auto;padding-inline:22px}
+.code{
+  width:100%;font:400 12px/1.45 "Space Mono",ui-monospace,Menlo,monospace;
+  color:var(--ink);background:var(--ground);border:1px solid var(--line);
+  border-radius:8px;padding:10px;resize:vertical;word-break:break-all;
+}
+.err{
+  margin:0;color:var(--accent);font:500 13.5px/1.4 "Archivo",system-ui,sans-serif;
+  display:flex;gap:7px;align-items:baseline;
+}
+.err::before{content:"!";font-family:"Space Mono",monospace;font-weight:700}
+
+/* ---------- cut log ---------- */
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.log li{
+  display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:baseline;
+  padding:9px 0;border-top:1px solid var(--line);
+  font:400 13px/1.35 "Space Mono",ui-monospace,Menlo,monospace;
+  font-variant-numeric:tabular-nums;
+}
+.log li:first-child{border-top:0}
+.log .n{color:var(--muted);font-size:11px}
+.log .nm{color:var(--ink);font-family:"Archivo",system-ui,sans-serif;font-weight:600;font-size:14px;overflow-wrap:anywhere}
+.log .mv{color:var(--muted);text-align:right;white-space:nowrap}
+.log .mv.up{color:var(--safe)}
+.log .mv.dn{color:var(--fuse)}
+.log .mv.bx{color:var(--accent);font-weight:700}
+.log-empty{margin:0;color:var(--muted);font-size:13.5px}
+
+/* ---------- relay handoff ---------- */
+.verdict{
+  font:400 clamp(24px,7vw,32px)/1.05 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
+  text-transform:uppercase;margin:0;text-wrap:balance;
+}
+.verdict.up{color:var(--safe)}
+.verdict.dn{color:var(--fuse)}
+
+/* ---------- game over ---------- */
+.boom-card{border-color:var(--accent)}
+.boom{
+  font:400 clamp(58px,20vw,104px)/.82 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;
+  text-transform:uppercase;color:var(--accent);margin:0;letter-spacing:.01em;
+}
+.reveal{display:flex;gap:10px;flex-wrap:wrap}
+.reveal div{
+  flex:1 1 120px;border:1px solid var(--line);border-radius:8px;padding:11px 12px;
+  display:flex;flex-direction:column;gap:4px;min-width:0;
+}
+.reveal b{
+  font:400 30px/1 "Anton",Impact,"Arial Narrow Bold","Haettenschweiler",sans-serif;font-variant-numeric:tabular-nums;
+  overflow-wrap:anywhere;
+}
+.reveal .accent{color:var(--accent)}
+
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+
+.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97)}
+@keyframes shake{
+  10%,90%{transform:translateX(-2px)}
+  20%,80%{transform:translateX(4px)}
+  30%,50%,70%{transform:translateX(-7px)}
+  40%,60%{transform:translateX(7px)}
+}
+.pop{animation:pop .45s cubic-bezier(.2,1.5,.4,1) both}
+@keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+
+.foot{
+  font:400 12px/1.5 "Space Mono",ui-monospace,Menlo,monospace;
+  color:var(--muted);text-align:center;margin:0;
+}
+.foot a{color:var(--muted)}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+}
+
+/* ---------- online: lobby, seats, turn prompt ---------- */
+.big-choice{display:flex;flex-direction:column;gap:10px}
+.choice{
+  display:flex;gap:13px;align-items:flex-start;text-align:left;width:100%;
+  border:1px solid var(--line);border-radius:var(--radius);background:var(--panel-2);
+  padding:15px;cursor:pointer;color:var(--ink);transition:border-color .14s ease;
+}
+.choice:hover{border-color:var(--accent)}
+.choice strong{
+  display:block;font:400 19px/1.05 "Anton",Impact,"Arial Narrow Bold",sans-serif;
+  text-transform:uppercase;letter-spacing:.01em;margin-bottom:3px;
+}
+.choice span{display:block;color:var(--muted);font-size:13.5px;line-height:1.4}
+.choice em{
+  flex:0 0 auto;font-style:normal;font:400 26px/1 "Anton",Impact,sans-serif;color:var(--accent);
+  width:34px;text-align:center;
+}
+
+.roomcode{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  border:1px dashed var(--line);border-radius:var(--radius);padding:13px 15px;
+}
+.roomcode b{
+  font:400 clamp(32px,11vw,44px)/.9 "Anton",Impact,"Arial Narrow Bold",sans-serif;
+  letter-spacing:.14em;color:var(--accent);font-variant-numeric:tabular-nums;
+}
+#joinCode{
+  text-align:center;letter-spacing:.32em;text-transform:uppercase;
+  font-family:"Space Mono",ui-monospace,monospace;font-size:24px;padding:14px 12px;
+}
+
+.seats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:0}
+.seats li{
+  display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line);
+  font-size:15px;
+}
+.seats li:first-child{border-top:0}
+.seats .dot{
+  flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--safe);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--safe) 22%, transparent);
+}
+.seats .nm{font-weight:600;overflow-wrap:anywhere}
+.seats .tag{
+  margin-left:auto;font:700 10px/1 "Space Mono",ui-monospace,monospace;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+}
+.seats .tag.you{color:var(--accent)}
+
+.turnbar{
+  display:flex;align-items:center;gap:12px;
+  border-radius:var(--radius);padding:14px 15px;
+  border:1px solid var(--line);background:var(--panel-2);
+}
+.turnbar.mine{border-color:var(--accent);background:var(--accent-soft)}
+.turnbar .pulse{
+  flex:0 0 auto;width:11px;height:11px;border-radius:50%;background:var(--muted);
+}
+.turnbar.mine .pulse{background:var(--accent);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 60%, transparent)}
+  50%{box-shadow:0 0 0 9px transparent}}
+.turnbar p{margin:0;font-size:14.5px;line-height:1.35}
+.turnbar b{
+  display:block;font:400 21px/1.05 "Anton",Impact,"Arial Narrow Bold",sans-serif;
+  text-transform:uppercase;letter-spacing:.01em;
+}
+.turnbar.mine b{color:var(--accent)}
+
+.offline-note{
+  display:flex;gap:9px;align-items:flex-start;border:1px solid var(--line);
+  border-radius:8px;padding:10px 12px;background:var(--panel-2);
+}
+.offline-note p{margin:0;font-size:13px;line-height:1.45;color:var(--muted)}
+.spin{display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main class="wrap" id="app">
+
+  <header class="mast">
+    <h1>Number <em>Bomb</em></h1>
+    <span class="stencil" id="mastTag">Ready</span>
+  </header>
+
+  <!-- ============ HOME ============ -->
+  <section id="screenHome" class="panel" aria-labelledby="homeHead">
+    <div>
+      <span class="label">Pick a number, don't be the one who finds the bomb</span>
+      <h2 id="homeHead" style="margin:6px 0 0;font:400 22px/1.1 'Anton',Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase">How are you playing?</h2>
+    </div>
+
+    <div class="big-choice">
+      <button class="choice" id="goHost" type="button">
+        <em>&#9679;</em>
+        <span><strong>Start a game</strong><span id="hostBlurb">Arm the bomb, get a room code, and everyone plays from their own phone.</span></span>
+      </button>
+      <button class="choice" id="goJoin" type="button">
+        <em>&#8594;</em>
+        <span><strong>Join a game</strong><span>Someone sent you a room code. Take a seat at their table.</span></span>
+      </button>
+      <button class="choice" id="goLocal" type="button">
+        <em>&#8635;</em>
+        <span><strong>Pass the phone</strong><span>One device round the table. Works anywhere, with anyone, no sign-in.</span></span>
+      </button>
+    </div>
+
+    <div class="offline-note" id="syncNote" hidden>
+      <p id="syncNoteText"></p>
+    </div>
+
+    <button class="btn btn--sm btn--ghost" id="resumeLast" type="button" hidden>Rejoin your last game</button>
+  </section>
+
+  <!-- ============ HOST A ROOM ============ -->
+  <section id="screenHost" class="panel" hidden aria-labelledby="hostHead">
+    <div>
+      <span class="label">Starting a game</span>
+      <h2 id="hostHead" style="margin:6px 0 0;font:400 22px/1.1 'Anton',Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase">Arm the bomb</h2>
+    </div>
+
+    <label class="field"><span class="label">Your name</span>
+      <input type="text" id="hostName" maxlength="18" placeholder="What the group calls you"></label>
+
+    <div class="field">
+      <span class="label">The range</span>
+      <div class="row2">
+        <label class="field"><span class="hint">Lowest</span><input type="number" id="rangeLo" value="1" inputmode="numeric"></label>
+        <label class="field"><span class="hint">Highest</span><input type="number" id="rangeHi" value="100" inputmode="numeric"></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label">The bomb</span>
+      <p class="hint">Type a number only if you're sitting out. Tap <b>Random</b> and nobody knows it &mdash; including you, so you can play.</p>
+      <div class="row2">
+        <input type="password" id="secret" inputmode="numeric" autocomplete="off" placeholder="Secret number">
+        <div style="display:flex;gap:8px;flex:0 0 auto">
+          <button class="btn btn--sm" id="peek" type="button" aria-pressed="false">Show</button>
+          <button class="btn btn--sm" id="randomise" type="button">Random</button>
+        </div>
+      </div>
+      <p class="hint" id="secretNote">Must sit strictly inside the range &mdash; 2 to 99.</p>
+    </div>
+
+    <div class="field">
+      <span class="label">What the loser owes</span>
+      <input type="text" id="penalty" value="eats the last piece on the dish" maxlength="90">
+      <div class="chips" id="penaltyChips"></div>
+    </div>
+
+    <p class="err" id="hostErr" hidden></p>
+    <button class="btn btn--primary btn--wide" id="createBtn" type="button">Open the room</button>
+    <button class="btn btn--sm btn--ghost" id="hostBack" type="button" style="align-self:flex-start">Back</button>
+  </section>
+
+  <!-- ============ JOIN ============ -->
+  <section id="screenJoin" class="panel" hidden aria-labelledby="joinHead">
+    <div>
+      <span class="label">Joining a game</span>
+      <h2 id="joinHead" style="margin:6px 0 0;font:400 22px/1.1 'Anton',Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase">Take a seat</h2>
+    </div>
+    <label class="field"><span class="label">Room code</span>
+      <input type="text" id="joinCode" maxlength="4" autocomplete="off" spellcheck="false" placeholder="&mdash;&mdash;&mdash;&mdash;"></label>
+    <label class="field"><span class="label">Your name</span>
+      <input type="text" id="joinName" maxlength="18" placeholder="What the group calls you"></label>
+    <p class="err" id="joinErr" hidden></p>
+    <button class="btn btn--primary btn--wide" id="joinBtn" type="button">Join the table</button>
+    <button class="btn btn--sm btn--ghost" id="joinBack" type="button" style="align-self:flex-start">Back</button>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="screenLobby" class="panel" hidden aria-labelledby="lobbyHead">
+    <div>
+      <span class="label">Waiting room</span>
+      <h2 id="lobbyHead" style="margin:6px 0 0;font:400 22px/1.1 'Anton',Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase">Everyone in?</h2>
+    </div>
+
+    <div class="roomcode">
+      <div><span class="label" style="display:block;margin-bottom:4px">Room code</span><b id="lobbyCode">&mdash;&mdash;&mdash;&mdash;</b></div>
+      <button class="btn btn--sm" id="copyCode" type="button">Copy</button>
+    </div>
+
+    <button class="btn btn--wa btn--wide" id="inviteBtn" type="button">Invite the group on WhatsApp</button>
+
+    <div>
+      <span class="label" style="display:block;margin-bottom:9px">At the table</span>
+      <ul class="seats" id="seatList"></ul>
+      <p class="hint" id="seatHint">Seats appear here the moment someone joins.</p>
+    </div>
+
+    <div class="stake">
+      <div><span class="label">On the line</span><p>Loser <b id="lobbyStake">&mdash;</b></p></div>
+    </div>
+
+    <p class="err" id="lobbyErr" hidden></p>
+    <button class="btn btn--primary btn--wide" id="startBtn" type="button">Start the game</button>
+    <p class="hint" id="lobbyWait" hidden>Waiting for the host to start. You can close this &mdash; you'll pick up where it left off.</p>
+    <button class="btn btn--sm btn--ghost" id="leaveLobby" type="button" style="align-self:flex-start">Leave the room</button>
+  </section>
+
+  <!-- ============ LOCAL SETUP (pass the phone) ============ -->
+  <section id="screenLocal" class="panel" hidden aria-labelledby="localHead">
+    <div>
+      <span class="label">One device, round the table</span>
+      <h2 id="localHead" style="margin:6px 0 0;font:400 22px/1.1 'Anton',Impact,'Arial Narrow Bold',sans-serif;text-transform:uppercase">Who's playing?</h2>
+    </div>
+    <p class="hint">Example names below &mdash; tap any to rename. Turns run top to bottom.</p>
+    <div class="roster" id="roster"></div>
+    <button class="btn btn--sm btn--ghost" id="addPlayer" style="align-self:flex-start">+ Add player</button>
+
+    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">The range</span>
+      <div class="row2">
+        <label class="field"><span class="hint">Lowest</span><input type="number" id="lRangeLo" value="1" inputmode="numeric"></label>
+        <label class="field"><span class="hint">Highest</span><input type="number" id="lRangeHi" value="100" inputmode="numeric"></label>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label">The bomb</span>
+      <div class="row2">
+        <input type="password" id="lSecret" inputmode="numeric" autocomplete="off" placeholder="Secret number">
+        <div style="display:flex;gap:8px;flex:0 0 auto">
+          <button class="btn btn--sm" id="lPeek" type="button" aria-pressed="false">Show</button>
+          <button class="btn btn--sm" id="lRandomise" type="button">Random</button>
+        </div>
+      </div>
+      <p class="hint" id="lSecretNote">Must sit strictly inside the range &mdash; 2 to 99.</p>
+    </div>
+
+    <div class="field">
+      <span class="label">What the loser owes</span>
+      <input type="text" id="lPenalty" value="eats the last piece on the dish" maxlength="90">
+      <div class="chips" id="lPenaltyChips"></div>
+    </div>
+
+    <div class="field">
+      <span class="label">How the turn moves</span>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="pass" aria-pressed="true">Hand the phone over</button>
+        <button type="button" data-mode="relay" aria-pressed="false">Send a turn code</button>
+      </div>
+      <p class="hint" id="modeNote">One device goes round the table. Nothing to install.</p>
+    </div>
+
+    <p class="err" id="setupErr" hidden></p>
+    <button class="btn btn--primary btn--wide" id="localStart" type="button">Arm it &mdash; start the game</button>
+
+    <div class="field" style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label">Joining a game already running?</span>
+      <p class="hint">Paste the turn code (or link) a player sent to the group.</p>
+      <div class="deck">
+        <input type="text" id="resumeCode" placeholder="Paste code or link" autocomplete="off" spellcheck="false">
+        <button class="btn" id="resumeBtn" type="button">Continue</button>
+      </div>
+      <p class="err" id="resumeErr" hidden></p>
+    </div>
+    <button class="btn btn--sm btn--ghost" id="localBack" type="button" style="align-self:flex-start">Back</button>
+  </section>
+
+  <!-- ============ PLAY ============ -->
+  <section id="screenPlay" class="panel" hidden aria-labelledby="turnName">
+    <div class="turnbar" id="turnBar">
+      <span class="pulse"></span>
+      <p><b id="turnName">&mdash;</b><span id="turnSub">&nbsp;</span></p>
+    </div>
+
+    <div class="rig">
+      <div class="bounds">
+        <div class="bound bound--low"><span class="label">Floor</span><span class="bound-num" id="lowNum">1</span></div>
+        <div class="bound bound--high"><span class="label">Ceiling</span><span class="bound-num" id="highNum">100</span></div>
+      </div>
+      <div class="fuse" id="fuse" role="img" aria-label="Live range">
+        <div class="fuse-track"></div>
+        <div class="fuse-live" id="fuseLive"></div>
+        <div class="fuse-clamp fuse-clamp--low" id="clampLow"></div>
+        <div class="fuse-clamp fuse-clamp--high" id="clampHigh"></div>
+      </div>
+      <p class="rig-note"><span id="liveCount">&mdash;</span><span id="cutCount">&mdash;</span></p>
+    </div>
+
+    <div class="order" id="orderPips" style="justify-content:flex-start"></div>
+
+    <div class="stake">
+      <div><span class="label">On the line</span><p>Loser <b id="stakeText">&mdash;</b></p></div>
+    </div>
+
+    <div id="guessBlock">
+      <label class="label" for="guess" style="display:block;margin-bottom:7px">Pick a number in the live range</label>
+      <div class="deck">
+        <input type="number" id="guess" inputmode="numeric" autocomplete="off" placeholder="&mdash;">
+        <button class="btn btn--primary" id="guessBtn" type="button">Guess</button>
+      </div>
+    </div>
+    <button class="btn btn--wa btn--wide" id="nudgeBtn" type="button" hidden>Nudge them on WhatsApp</button>
+    <p class="err" id="playErr" hidden></p>
+
+    <div style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label" style="display:block;margin-bottom:9px">Cut log</span>
+      <ul class="log" id="log"></ul>
+      <p class="log-empty" id="logEmpty">No cuts yet. First guess sets the tone.</p>
+    </div>
+
+    <button class="btn btn--sm btn--ghost" id="abandon" type="button" style="align-self:flex-start">Leave this game</button>
+  </section>
+
+  <!-- ============ RELAY HANDOFF (pass-the-phone relay only) ============ -->
+  <section id="screenRelay" class="panel" hidden aria-labelledby="relayVerdict">
+    <div>
+      <span class="label" id="relayWho">&mdash;</span>
+      <p class="verdict" id="relayVerdict">&mdash;</p>
+    </div>
+    <p class="hint" id="relayRange">&mdash;</p>
+    <div id="relayCodeWrap" hidden>
+      <span class="label" style="display:block;margin-bottom:7px">Turn code</span>
+      <textarea class="code" id="relayCode" rows="4" readonly aria-label="Turn code"></textarea>
+    </div>
+    <button class="btn btn--wa btn--wide" id="relaySend" type="button">Send the turn on WhatsApp</button>
+    <div class="row2">
+      <button class="btn btn--sm" id="relayCopy" type="button">Copy link</button>
+      <button class="btn btn--sm btn--ghost" id="relayStay" type="button">Keep playing here</button>
+    </div>
+    <p class="hint" id="relayHow"></p>
+  </section>
+
+  <!-- ============ GAME OVER ============ -->
+  <section id="screenOver" class="panel boom-card" hidden aria-labelledby="boomHead">
+    <p class="boom" id="boomHead">Boom!</p>
+    <p style="margin:0;font-size:17px;line-height:1.4"><b id="loserName">&mdash;</b> <span id="loserVerb">cut the live wire.</span></p>
+    <div class="reveal">
+      <div><span class="label">The bomb was</span><b class="accent" id="secretReveal">&mdash;</b></div>
+      <div><span class="label">Guesses survived</span><b id="turnsSurvived">&mdash;</b></div>
+    </div>
+    <div class="stake">
+      <div><span class="label">Penalty due</span><p><b id="overPenalty">&mdash;</b> <span id="overPenaltyText">&mdash;</span></p></div>
+    </div>
+    <button class="btn btn--wa btn--wide" id="shareResult" type="button">Break the news on WhatsApp</button>
+    <div class="row2">
+      <button class="btn" id="rematch" type="button">Rematch &mdash; same crew</button>
+      <button class="btn btn--ghost" id="newGame" type="button">Back to the start</button>
+    </div>
+    <p class="hint" id="rematchWait" hidden>Waiting for the host to deal a rematch.</p>
+    <div style="border-top:1px solid var(--line);padding-top:14px">
+      <span class="label" style="display:block;margin-bottom:9px">Full cut log</span>
+      <ul class="log" id="overLog"></ul>
+    </div>
+  </section>
+
+  <p class="foot" id="foot">Turn-based, no clock. Take an hour or a week &mdash; the game waits.</p>
+</main>
+
+<script>
+// ===== ENGINE START =====
+// Pure game rules + codecs. No DOM and no network in here — the test suite
+// loads this block directly.
+const ENGINE = (() => {
+  const VERSION = 2;
+  const MAX_PLAYERS = 10;
+  const KEY = "pathfinder-number-bomb-v1";
+  const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I, O, 0, 1
+  const MODES = ["pass", "relay", "online"];
+
+  const PENALTIES = [
+    "eats the last piece on the dish",
+    "picks the lunch venue (and no one is allowed to complain)",
+    "buys the next round",
+    "does the dishes tonight",
+    "carries everyone's bags to the car",
+    "sings the next karaoke pick, chosen by the group",
+    "is on call for the next airport run",
+    "sets their profile photo to a group selfie for a week"
+  ];
+
+  /** Numbers a player may still legally guess: strictly between the bounds. */
+  function remaining(state){ return Math.max(0, state.hi - state.lo - 1); }
+
+  function createGame({ players, lo, hi, secret, penalty, mode }){
+    const names = (players || []).map(n => String(n).trim()).filter(Boolean);
+    if (names.length < 2) throw new Error("Need at least 2 players.");
+    if (names.length > MAX_PLAYERS) throw new Error(`At most ${MAX_PLAYERS} players.`);
+    if (!Number.isInteger(lo) || !Number.isInteger(hi)) throw new Error("Range must be whole numbers.");
+    if (hi - lo < 2) throw new Error("Range needs at least one guessable number inside it.");
+    if (!Number.isInteger(secret) || secret <= lo || secret >= hi){
+      throw new Error("The bomb must sit strictly inside the range.");
+    }
+    return {
+      v: VERSION,
+      players: names,
+      lo0: lo, hi0: hi,
+      lo, hi,
+      secret,
+      penalty: String(penalty || PENALTIES[0]).trim() || PENALTIES[0],
+      mode: MODES.includes(mode) ? mode : "pass",
+      turn: 0,
+      history: [],
+      over: false,
+      loser: null
+    };
+  }
+
+  /**
+   * Boundaries are excluded so the range always shrinks and the game always ends.
+   * Invariant: lo < secret < hi, so at least one legal guess always exists.
+   */
+  function validateGuess(state, raw){
+    if (state.over) return { ok:false, reason:"This game is already over." };
+    const text = String(raw ?? "").trim();
+    if (!text) return { ok:false, reason:"Type a number first." };
+    const g = Number(text);
+    if (!Number.isFinite(g)) return { ok:false, reason:"That isn't a number." };
+    if (!Number.isInteger(g)) return { ok:false, reason:"Whole numbers only — no decimals." };
+    if (g <= state.lo || g >= state.hi){
+      return { ok:false, reason:`Out of range. Pick between ${state.lo + 1} and ${state.hi - 1}.` };
+    }
+    return { ok:true, value:g };
+  }
+
+  /** Returns a new state. Turn advances only on a legal, non-fatal guess. */
+  function applyGuess(state, guess){
+    const check = validateGuess(state, guess);
+    if (!check.ok) throw new Error(check.reason);
+    const g = check.value;
+    const next = { ...state, history: state.history.concat([{ p: state.turn, g, side: "" }]) };
+    const entry = next.history[next.history.length - 1];
+
+    if (g === state.secret){
+      entry.side = "boom";
+      next.over = true;
+      next.loser = state.turn;
+      return next;
+    }
+    entry.side = g < state.secret ? "low" : "high";
+    if (g < state.secret) next.lo = g; else next.hi = g;
+    next.turn = (state.turn + 1) % state.players.length;
+    return next;
+  }
+
+  /** Fresh game, same crew and stakes; the loser's neighbour leads off. */
+  function rematch(state, secret){
+    const base = createGame({
+      players: state.players,
+      lo: state.lo0, hi: state.hi0,
+      secret, penalty: state.penalty, mode: state.mode
+    });
+    base.turn = state.loser === null ? 0 : (state.loser + 1) % state.players.length;
+    return base;
+  }
+
+  function randomSecret(lo, hi){
+    return lo + 1 + Math.floor(Math.random() * (hi - lo - 1));
+  }
+
+  function newRoomCode(len = 4){
+    let out = "";
+    const pool = (globalThis.crypto && globalThis.crypto.getRandomValues)
+      ? globalThis.crypto.getRandomValues(new Uint32Array(len))
+      : Array.from({ length: len }, () => Math.floor(Math.random() * 4294967296));
+    for (let i = 0; i < len; i++) out += CODE_ALPHABET[pool[i] % CODE_ALPHABET.length];
+    return out;
+  }
+
+  // --- codecs ---------------------------------------------------------------
+  // Scrambled, not encrypted: it stops a casual glance at a URL or a stored
+  // document, nothing more. Anyone determined can undo it.
+  function mask(bytes){
+    const out = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ KEY.charCodeAt(i % KEY.length);
+    return out;
+  }
+  function pack(text){
+    const bytes = mask(new TextEncoder().encode(text));
+    let bin = "";
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function unpack(token){
+    const bin = atob(String(token).replace(/-/g, "+").replace(/_/g, "/"));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(mask(bytes));
+  }
+
+  /** The bomb is never written to shared storage as a plain number. */
+  function hideNumber(n){ return pack(String(n) + ":" + Math.random().toString(36).slice(2, 8)); }
+  function showNumber(token){
+    try {
+      const n = parseInt(String(unpack(token)).split(":")[0], 10);
+      return Number.isInteger(n) ? n : null;
+    } catch { return null; }
+  }
+
+  const int = v => Number.isInteger(v);
+
+  /**
+   * A shared document or turn code is data from someone else's phone, so
+   * nothing is taken on trust: every field is checked, and so is the invariant
+   * the rules depend on (lo < secret < hi). A state that fails is discarded
+   * rather than half-loaded, which is what stops a mangled game being
+   * unplayable or accepting guesses it should refuse.
+   */
+  function isValidState(s){
+    if (!s || typeof s !== "object" || s.v !== VERSION) return false;
+    if (!Array.isArray(s.players) || s.players.length < 2 || s.players.length > MAX_PLAYERS) return false;
+    if (!s.players.every(p => typeof p === "string" && p.trim() !== "")) return false;
+    if (![s.lo0, s.hi0, s.lo, s.hi, s.secret, s.turn].every(int)) return false;
+    if (s.hi0 - s.lo0 < 2) return false;
+    if (s.lo < s.lo0 || s.hi > s.hi0 || s.lo >= s.hi) return false;
+    if (s.secret <= s.lo || s.secret >= s.hi) return false;
+    if (s.turn < 0 || s.turn >= s.players.length) return false;
+    if (typeof s.over !== "boolean") return false;
+    if (s.over ? !(int(s.loser) && s.loser >= 0 && s.loser < s.players.length) : s.loser !== null) return false;
+    if (typeof s.penalty !== "string" || s.penalty.trim() === "") return false;
+    if (!MODES.includes(s.mode)) return false;
+    if (!Array.isArray(s.history)) return false;
+    return s.history.every(e =>
+      e && typeof e === "object" && int(e.p) && e.p >= 0 && e.p < s.players.length &&
+      int(e.g) && ["low", "high", "boom"].includes(e.side));
+  }
+
+  function encodeState(state){ return pack(JSON.stringify(state)); }
+  function decodeState(token){
+    try {
+      const state = JSON.parse(unpack(token));
+      return isValidState(state) ? state : null;
+    } catch { return null; }
+  }
+
+  /** Shared document <-> playable state. The bomb crosses hidden, never plain. */
+  function toDoc(state, extra){
+    const { secret, ...rest } = state;
+    return { ...rest, bomb: hideNumber(secret), ...(extra || {}) };
+  }
+  function fromDoc(doc){
+    if (!doc || typeof doc !== "object") return null;
+    const { bomb, ...rest } = doc;
+    const secret = showNumber(bomb);
+    if (secret === null) return null;
+    const state = { ...rest, secret };
+    return isValidState(state) ? state : null;
+  }
+
+  return {
+    VERSION, MAX_PLAYERS, MODES, PENALTIES, CODE_ALPHABET,
+    remaining, createGame, validateGuess, applyGuess, rematch, randomSecret,
+    newRoomCode, encodeState, decodeState, isValidState, toDoc, fromDoc,
+    hideNumber, showNumber
+  };
+})();
+// ===== ENGINE END =====
+</script>
+<!-- Optional. Present only on a self-hosted copy with its own Firebase project. -->
+<script src="config.js"></script>
+<script>
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SCREENS = ["Home", "Host", "Join", "Lobby", "Local", "Play", "Relay", "Over"];
+
+  const store = {
+    get(k, fb){ try { const v = localStorage.getItem(k); return v === null ? fb : JSON.parse(v); } catch { return fb; } },
+    set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
+    drop(k){ try { localStorage.removeItem(k); } catch { /* private mode */ } }
+  };
+
+  // This device's seat identity. Not a login — it only tells the room which
+  // chair is yours, so closing the page and coming back keeps your place.
+  let seatId = store.get("nb.seat", null);
+  if (typeof seatId !== "string" || seatId.length < 8){
+    seatId = "s" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+    store.set("nb.seat", seatId);
+  }
+
+  const S = {
+    db: null, probed: false,
+    online: false, code: null, isHost: false,
+    state: null, doc: null, seats: [],
+    unsubGame: null, unsubSeats: null,
+    localMode: "pass", promptedFor: -1, showingOver: false,
+    backend: null, bootError: "",
+    randomArmed: { host: false, local: false }
+  };
+
+  const mySeatIndex = () => S.online && S.state ? (S.state.seats || []).indexOf(seatId) : -1;
+  const isMyTurn = () => !S.online || (S.state && (S.state.seats || [])[S.state.turn] === seatId);
+
+  function show(name){
+    SCREENS.forEach(s => { const el = $("screen" + s); if (el) el.hidden = (s !== name); });
+    window.scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" });
+  }
+  function err(id, msg){
+    const el = $(id);
+    if (!msg){ el.hidden = true; el.textContent = ""; return; }
+    el.hidden = false; el.textContent = msg;
+  }
+
+  /** Stable, human-readable reasons for the store's error codes. */
+  function dbMessage(e){
+    switch (e && e.code){
+      case "not_granted":
+      case "capability_disabled":
+      case "capability_removed": return "Synced play isn't available in this view. Use Pass the phone instead.";
+      case "quota_exceeded": return "The game store is full. Old rooms need clearing before a new one opens.";
+      case "resource_exhausted": return "Too many moves at once. Give it a second and try again.";
+      case "invalid_argument": return "That move was refused by the store. Reload and try again.";
+      case "revoked": return "Your access to this room ended. Back to the start.";
+      default: return "The connection hiccuped. Try that again.";
+    }
+  }
+
+  // ---------- attention: the closest thing to a push we can honestly do ------
+  let audioCtx = null;
+  function beep(){
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      audioCtx = audioCtx || new Ctx();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const t0 = audioCtx.currentTime;
+      [660, 880].forEach((f, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "triangle"; o.frequency.value = f;
+        const at = t0 + i * 0.17;
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.22, at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 0.16);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(at); o.stop(at + 0.2);
+      });
+    } catch { /* audio blocked */ }
+  }
+  async function askNotify(){
+    try {
+      if (typeof Notification === "undefined") return false;
+      if (Notification.permission === "granted") return true;
+      if (Notification.permission === "denied") return false;
+      return (await Notification.requestPermission()) === "granted";
+    } catch { return false; }
+  }
+  function notify(body){
+    try {
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      if (!document.hidden) return;
+      new Notification("Number Bomb — your turn", { body, tag: "number-bomb", renotify: true });
+    } catch { /* blocked in this frame */ }
+  }
+  let flashTimer = null;
+  const baseTitle = document.title;
+  function flashTitle(on){
+    clearInterval(flashTimer); flashTimer = null;
+    try { document.title = baseTitle; } catch { /* ignore */ }
+    if (!on) return;
+    let t = false;
+    flashTimer = setInterval(() => {
+      t = !t;
+      try { document.title = t ? "💣 YOUR TURN" : baseTitle; } catch { /* ignore */ }
+    }, 900);
+  }
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) flashTitle(false); });
+
+  function promptMyTurn(){
+    const st = S.state;
+    if (!st || st.over) return;
+    if (st.history.length === S.promptedFor) return;
+    S.promptedFor = st.history.length;
+    try { navigator.vibrate && navigator.vibrate([45, 70, 45, 70, 170]); } catch { /* ignore */ }
+    beep();
+    notify(`Live range ${st.lo} – ${st.hi}. ${ENGINE.remaining(st)} numbers left.`);
+    if (document.hidden) flashTitle(true);
+  }
+
+  // ---------- backends ------------------------------------------------------
+  // Two stores can drive a synced room and both speak the same document API,
+  // so everything above this line is written once and works on either.
+  //   firebase  — a self-hosted copy with its own project: anyone can join.
+  //   artifact  — the Claude-hosted page: same workspace only.
+  const SDK = "https://www.gstatic.com/firebasejs/10.14.1/";
+
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src; s.async = false;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Could not load " + src));
+      document.head.append(s);
+    });
+  }
+
+  /** Firestore's compat API reshaped to the artifact store's surface. */
+  function wrapFirestore(fs){
+    const wrapSnap = s => ({ id: s.id, exists: s.exists, data: () => s.data(),
+                             metadata: { fromCache: false, hasPendingWrites: false } });
+    const wrapQuery = q => ({
+      where: (...a) => wrapQuery(q.where(...a)),
+      orderBy: (...a) => wrapQuery(q.orderBy(...a)),
+      limit: nn => wrapQuery(q.limit(nn)),
+      get: async () => wrapQS(await q.get()),
+      onSnapshot: (next, onErr) => q.onSnapshot(s => next(wrapQS(s)), onErr)
+    });
+    const wrapQS = s => ({
+      docs: s.docs.map(wrapSnap), size: s.size, empty: s.empty,
+      docChanges: () => s.docChanges().map(c => ({ type: c.type, doc: wrapSnap(c.doc),
+                                                   oldIndex: c.oldIndex, newIndex: c.newIndex })),
+      metadata: { fromCache: false, hasPendingWrites: false }
+    });
+    const wrapDoc = ref => ({
+      id: ref.id, path: ref.path,
+      get: async () => wrapSnap(await ref.get()),
+      set: d => ref.set(d),
+      update: d => ref.update(d),
+      delete: () => ref.delete(),
+      onSnapshot: (next, onErr) => ref.onSnapshot(s => next(wrapSnap(s)), onErr),
+      collection: p => wrapColl(ref.collection(p))
+    });
+    const wrapColl = ref => Object.assign(wrapQuery(ref), {
+      path: ref.path,
+      doc: id => wrapDoc(id ? ref.doc(id) : ref.doc())
+    });
+    return { doc: p => wrapDoc(fs.doc(p)), collection: p => wrapColl(fs.collection(p)) };
+  }
+
+  /**
+   * Anonymous sign-in: no account, no email, no password. It exists only so
+   * the rules can tell one player from another and hold a seat to a device.
+   */
+  async function connectFirebase(){
+    const cfg = window.NUMBER_BOMB_FIREBASE;
+    if (!cfg || !cfg.projectId || String(cfg.projectId).startsWith("YOUR_")) return null;
+    const base = cfg.sdkBase || SDK;
+    await loadScript(base + "firebase-app-compat.js");
+    await Promise.all([
+      loadScript(base + "firebase-auth-compat.js"),
+      loadScript(base + "firebase-firestore-compat.js")
+    ]);
+    const app = window.firebase.initializeApp(cfg);
+    const auth = app.auth();
+    const fs = app.firestore();
+    if (cfg.emulator){
+      fs.useEmulator(cfg.emulator.host, cfg.emulator.port);
+      auth.useEmulator(`http://${cfg.emulator.host}:${cfg.emulator.authPort || 9099}`, { disableWarnings: true });
+    }
+    const cred = await auth.signInAnonymously();
+    return { db: wrapFirestore(fs), uid: cred.user.uid };
+  }
+
+  // ---------- sharing -------------------------------------------------------
+  function canLinkShare(){
+    try { if (window.top !== window.self) return false; } catch { return false; }
+    return location.protocol === "http:" || location.protocol === "https:";
+  }
+  const baseUrl = () => location.origin + location.pathname + location.search;
+  const turnCode = () => ENGINE.encodeState(S.state);
+  const turnLink = () => baseUrl() + "#s=" + turnCode();
+  const turnHandoff = () => canLinkShare() ? turnLink() : turnCode();
+  const waLink = text => "https://wa.me/?text=" + encodeURIComponent(text);
+
+  function openWhatsApp(text, btn){
+    let w = null;
+    try { w = window.open(waLink(text), "_blank", "noopener"); } catch { w = null; }
+    if (!w) copy(text, btn);
+  }
+  function readToken(raw){
+    const text = String(raw || "").trim();
+    if (!text) return null;
+    const m = text.match(/#s=([^&\s]+)/);
+    let token = m ? m[1] : text;
+    try { token = decodeURIComponent(token); } catch { /* use raw */ }
+    return ENGINE.decodeState(token);
+  }
+  async function copy(text, btn){
+    if (btn.dataset.restore === undefined) btn.dataset.restore = btn.textContent;
+    const original = btn.dataset.restore;
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = "Copied";
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.append(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch { ok = false; }
+      ta.remove();
+      btn.textContent = ok ? "Copied" : "Copy failed — select it by hand";
+    }
+    clearTimeout(btn._restoreTimer);
+    btn._restoreTimer = setTimeout(() => {
+      btn.textContent = btn.dataset.restore ?? original;
+      delete btn.dataset.restore;
+    }, 2200);
+  }
+
+  function inviteMessage(){
+    const d = S.doc || {};
+    return [
+      "💣 *NUMBER BOMB* — join my table.",
+      "",
+      `Room code: *${S.code}*`,
+      `Loser ${d.penalty || "pays up"}.`,
+      "",
+      canLinkShare()
+        ? `Open this, tap “Join a game”, enter ${S.code}:\n${baseUrl()}`
+        : `Open Number Bomb, tap “Join a game” and enter ${S.code}.`
+    ].join("\n");
+  }
+  function nudgeMessage(){
+    const st = S.state;
+    return [
+      `💣 *${st.players[st.turn]}* — you're up in Number Bomb.`,
+      "",
+      `Live range: *${st.lo} – ${st.hi}*  (${ENGINE.remaining(st)} left)`,
+      `Loser ${st.penalty}.`,
+      `Room code: *${S.code}*`
+    ].join("\n");
+  }
+  function turnMessage(){
+    const st = S.state, left = ENGINE.remaining(st);
+    return [
+      "💣 *NUMBER BOMB*", "",
+      `${st.players[st.turn]} — you're up.`,
+      `Live range: *${st.lo} – ${st.hi}*  (${left} number${left === 1 ? "" : "s"} left)`,
+      `Loser ${st.penalty}.`, "",
+      canLinkShare() ? "Tap to take your turn:" : "Open Number Bomb and paste this code:",
+      turnHandoff()
+    ].join("\n");
+  }
+  function resultMessage(){
+    const st = S.state, loser = st.players[st.loser], safe = st.history.length - 1;
+    return [
+      `💥 *BOOM!* ${loser} triggered it.`, "",
+      `The bomb was *${st.secret}*.`,
+      `Survived ${safe} safe guess${safe === 1 ? "" : "es"}.`, "",
+      `${loser} ${st.penalty}. 😈`
+    ].join("\n");
+  }
+
+  // ---------- the blast -----------------------------------------------------
+  function blast(){
+    if (calm) return;
+    const c = $("fx"), ctx = c.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = innerWidth / 2, cy = innerHeight * 0.35;
+    const colours = ["#FF5333", "#F5A623", "#FFD166", "#D93A1F"];
+    const bits = Array.from({ length: 90 }, () => {
+      const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 11;
+      return { x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 3,
+               r: 2 + Math.random() * 4, c: colours[(Math.random() * colours.length) | 0], life: 1 };
+    });
+    let frame = 0;
+    (function tick(){
+      frame++;
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      let alive = false;
+      for (const b of bits){
+        b.life -= 0.016;
+        if (b.life <= 0) continue;
+        alive = true;
+        b.vy += 0.34; b.vx *= 0.99; b.x += b.vx; b.y += b.vy;
+        ctx.globalAlpha = Math.max(0, b.life);
+        ctx.fillStyle = b.c;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if (alive && frame < 200) requestAnimationFrame(tick);
+      else ctx.clearRect(0, 0, innerWidth, innerHeight);
+    })();
+  }
+
+  // ---------- rendering the board ------------------------------------------
+  const pct = n => { const span = S.state.hi0 - S.state.lo0; return span <= 0 ? 0 : ((n - S.state.lo0) / span) * 100; };
+
+  function renderLog(host){
+    const st = S.state;
+    host.textContent = "";
+    st.history.slice().reverse().forEach((h, idx) => {
+      const li = document.createElement("li");
+      const no = document.createElement("span");
+      no.className = "n"; no.textContent = String(st.history.length - idx).padStart(2, "0");
+      const nm = document.createElement("span");
+      nm.className = "nm"; nm.textContent = `${st.players[h.p]} · ${h.g}`;
+      const mv = document.createElement("span");
+      if (h.side === "boom"){ mv.className = "mv bx"; mv.textContent = "BOOM"; }
+      else if (h.side === "low"){ mv.className = "mv up"; mv.textContent = `floor → ${h.g}`; }
+      else { mv.className = "mv dn"; mv.textContent = `ceiling → ${h.g}`; }
+      li.append(no, nm, mv);
+      host.append(li);
+    });
+  }
+
+  function renderPlay(){
+    const st = S.state, left = ENGINE.remaining(st), mine = isMyTurn();
+    const cut = (st.hi0 - st.lo0 - 1) - left;
+
+    $("lowNum").textContent = st.lo;
+    $("highNum").textContent = st.hi;
+    $("stakeText").textContent = st.penalty;
+    $("mastTag").innerHTML = S.online
+      ? `Room ${S.code} &middot; ${st.lo}&ndash;${st.hi}`
+      : `Live &middot; ${st.lo}&ndash;${st.hi}`;
+
+    const bar = $("turnBar");
+    bar.className = "turnbar" + (mine && S.online ? " mine" : "");
+    if (S.online && mine){
+      $("turnName").textContent = "Your turn";
+      $("turnSub").textContent = `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
+    } else if (S.online){
+      $("turnName").textContent = `${st.players[st.turn]} is up`;
+      $("turnSub").textContent = "This page updates the moment they play. You can close it.";
+    } else {
+      $("turnName").textContent = st.players[st.turn];
+      $("turnSub").textContent = `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
+    }
+
+    const liveEl = $("liveCount");
+    liveEl.textContent = left === 1 ? "1 number left — it IS the bomb" : `${left} numbers still live`;
+    liveEl.className = left <= 3 ? "tight" : "";
+    $("cutCount").textContent = `${cut} cut away`;
+
+    const a = pct(st.lo), b = pct(st.hi);
+    $("fuseLive").style.left = a + "%";
+    $("fuseLive").style.width = Math.max(0, b - a) + "%";
+    $("clampLow").style.left = `calc(${a}% - 1.5px)`;
+    $("clampHigh").style.left = `calc(${b}% - 1.5px)`;
+    $("fuse").setAttribute("aria-label", `Live range ${st.lo} to ${st.hi}, ${left} numbers left`);
+
+    const pips = $("orderPips");
+    pips.textContent = "";
+    st.players.forEach((name, i) => {
+      const s = document.createElement("span");
+      s.textContent = S.online && (st.seats || [])[i] === seatId ? name + " (you)" : name;
+      if (i === st.turn) s.className = "on";
+      pips.append(s);
+    });
+
+    $("guessBlock").hidden = S.online && !mine;
+    $("nudgeBtn").hidden = !(S.online && !mine);
+    $("guess").min = st.lo + 1;
+    $("guess").max = st.hi - 1;
+    $("guess").placeholder = `${st.lo + 1}–${st.hi - 1}`;
+
+    renderLog($("log"));
+    $("logEmpty").hidden = st.history.length > 0;
+    $("abandon").textContent = S.online ? "Leave this game" : "End game & start over";
+  }
+
+  function endGame(){
+    const st = S.state, loser = st.players[st.loser];
+    const mine = S.online && (st.seats || [])[st.loser] === seatId;
+    $("loserName").textContent = mine ? "You" : loser;
+    $("loserVerb").textContent = mine ? "cut the live wire." : "cut the live wire.";
+    $("secretReveal").textContent = st.secret;
+    $("turnsSurvived").textContent = st.history.length - 1;
+    $("overPenalty").textContent = loser;
+    $("overPenaltyText").textContent = st.penalty;
+    $("mastTag").innerHTML = `Detonated &middot; ${st.secret}`;
+    $("rematch").hidden = S.online && !S.isHost;
+    $("rematchWait").hidden = !(S.online && !S.isHost);
+    $("newGame").textContent = S.online ? "Leave the room" : "Back to the start";
+    renderLog($("overLog"));
+    flashTitle(false);
+    show("Over");
+    S.showingOver = true;
+    blast();
+    if (!calm){
+      const card = $("screenOver");
+      card.classList.add("shake");
+      setTimeout(() => card.classList.remove("shake"), 600);
+    }
+    try { navigator.vibrate && navigator.vibrate([40, 60, 140]); } catch { /* ignore */ }
+  }
+
+  // ---------- online room ---------------------------------------------------
+  function stopSubs(){
+    if (S.unsubGame){ S.unsubGame(); S.unsubGame = null; }
+    if (S.unsubSeats){ S.unsubSeats(); S.unsubSeats = null; }
+  }
+
+  async function mintCode(){
+    for (let i = 0; i < 6; i++){
+      const c = ENGINE.newRoomCode();
+      const snap = await S.db.doc("rooms/" + c).get();
+      if (!snap.exists) return c;
+    }
+    throw new Error("Couldn't find a free room code. Try again.");
+  }
+
+  function enterRoom(code, isHost){
+    S.online = true; S.code = code; S.isHost = isHost;
+    S.promptedFor = -1; S.showingOver = false;
+    store.set("nb.room", code);
+    stopSubs();
+    const onErr = e => err("lobbyErr", dbMessage(e));
+    S.unsubGame = S.db.doc("rooms/" + code).onSnapshot(onGameSnap, onErr);
+    S.unsubSeats = S.db.collection(`rooms/${code}/seats`).orderBy("joinedAt").onSnapshot(onSeatsSnap, onErr);
+    askNotify();
+  }
+
+  function onSeatsSnap(snap){
+    S.seats = snap.docs.map(d => ({ id: d.id, name: String((d.data() || {}).name || "Player") }));
+    if (S.doc && S.doc.phase === "lobby") renderLobby();
+  }
+
+  function onGameSnap(snap){
+    if (!snap.exists){
+      err("lobbyErr", "");
+      leaveRoom("That room is gone. It may have been cleared.");
+      return;
+    }
+    const d = snap.data();
+    S.doc = d;
+    S.isHost = d.hostId === seatId;
+
+    if (d.phase === "lobby"){
+      S.state = null; S.showingOver = false;
+      renderLobby();
+      return;
+    }
+    const st = ENGINE.fromDoc(d);
+    if (!st){
+      err("lobbyErr", "This room's game didn't read cleanly, so it wasn't loaded.");
+      show("Lobby");
+      return;
+    }
+    S.state = st;
+    if (st.over){
+      if (!S.showingOver) endGame(); else { renderLog($("overLog")); }
+      return;
+    }
+    S.showingOver = false;
+    renderPlay();
+    show("Play");
+    if (isMyTurn()){ promptMyTurn(); $("guess").focus(); }
+    else flashTitle(false);
+  }
+
+  function renderLobby(){
+    const d = S.doc || {};
+    $("lobbyCode").textContent = S.code;
+    $("lobbyStake").textContent = d.penalty || "—";
+    $("mastTag").innerHTML = `Room ${S.code}`;
+    const host = $("seatList");
+    host.textContent = "";
+    S.seats.forEach(s => {
+      const li = document.createElement("li");
+      const dot = document.createElement("span"); dot.className = "dot";
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = s.name;
+      const tag = document.createElement("span");
+      tag.className = "tag" + (s.id === seatId ? " you" : "");
+      tag.textContent = s.id === d.hostId ? (s.id === seatId ? "you · host" : "host") : (s.id === seatId ? "you" : "");
+      li.append(dot, nm, tag);
+      host.append(li);
+    });
+    $("seatHint").hidden = S.seats.length > 0;
+    $("seatHint").textContent = "Seats appear here the moment someone joins.";
+    $("startBtn").hidden = !S.isHost;
+    $("lobbyWait").hidden = S.isHost;
+    $("startBtn").textContent = S.seats.length < 2
+      ? "Waiting for one more player…"
+      : `Start with ${S.seats.length} players`;
+    $("startBtn").disabled = S.seats.length < 2;
+    show("Lobby");
+  }
+
+  async function leaveRoom(message){
+    stopSubs();
+    if (S.online && S.code && S.doc && S.doc.phase === "lobby"){
+      try { await S.db.doc(`rooms/${S.code}/seats/${seatId}`).delete(); } catch { /* best effort */ }
+    }
+    S.online = false; S.code = null; S.state = null; S.doc = null; S.seats = [];
+    S.showingOver = false; S.promptedFor = -1;
+    store.drop("nb.room");
+    flashTitle(false);
+    renderHome(message || "");
+  }
+
+  // ---------- home ----------------------------------------------------------
+  function renderHome(message){
+    const synced = !!S.db;
+    const open = S.backend === "firebase";
+    $("goHost").disabled = !synced;
+    $("goJoin").disabled = !synced;
+    $("hostBlurb").textContent = synced
+      ? "Arm the bomb, get a room code, and everyone plays from their own phone."
+      : "This copy has no room server, so Start and Join are off.";
+    $("syncNote").hidden = !S.probed;
+    $("syncNoteText").textContent = message ? message : (
+      open  ? "Synced rooms are open to anyone with the link — no account, no sign-in. Share the room code and play from anywhere."
+    : synced ? "Synced rooms are on, but this copy is workspace-only: everyone who joins must be signed in to the same Claude workspace. For anyone else, use Pass the phone."
+             : "No room server on this copy, so Start and Join are off. Pass the phone works for anyone, anywhere.");
+    const last = store.get("nb.room", null);
+    $("resumeLast").hidden = !(synced && typeof last === "string" && last.length === 4);
+    $("mastTag").textContent = open ? "Open room" : synced ? "Synced" : "Ready";
+    show("Home");
+  }
+
+  // ---------- local (pass the phone) ---------------------------------------
+  const DEFAULT_NAMES = ["Adrian", "Mei", "Raj"];
+
+  function renderRoster(names){
+    const host = $("roster");
+    host.textContent = "";
+    names.forEach((name, i) => {
+      const row = document.createElement("div"); row.className = "slot";
+      const no = document.createElement("span");
+      no.className = "slot-no"; no.textContent = String(i + 1).padStart(2, "0");
+      const input = document.createElement("input");
+      input.type = "text"; input.id = "player" + i; input.value = name;
+      input.maxLength = 18; input.placeholder = "Player " + (i + 1);
+      input.setAttribute("aria-label", "Player " + (i + 1) + " name");
+      const x = document.createElement("button");
+      x.className = "x"; x.type = "button"; x.innerHTML = "&times;";
+      x.setAttribute("aria-label", "Remove player " + (i + 1));
+      x.addEventListener("click", () => {
+        const cur = readNames();
+        if (cur.length <= 2){ err("setupErr", "A game needs at least two players."); return; }
+        cur.splice(i, 1); renderRoster(cur);
+      });
+      row.append(no, input, x);
+      host.append(row);
+    });
+  }
+  const readNames = () => Array.from($("roster").querySelectorAll('input[type="text"]')).map(i => i.value.trim());
+
+  function renderChips(hostId, targetId){
+    const host = $(hostId);
+    host.textContent = "";
+    ENGINE.PENALTIES.slice(0, 5).forEach(text => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.type = "button"; b.textContent = text;
+      b.addEventListener("click", () => { $(targetId).value = text; });
+      host.append(b);
+    });
+    const surprise = document.createElement("button");
+    surprise.className = "chip"; surprise.type = "button"; surprise.textContent = "🎲 Surprise me";
+    surprise.addEventListener("click", () => {
+      const pool = ENGINE.PENALTIES.filter(p => p !== $(targetId).value);
+      $(targetId).value = pool[Math.floor(Math.random() * pool.length)];
+    });
+    host.append(surprise);
+  }
+
+  /** Shared by both setup screens: bomb field, peek toggle, random roll. */
+  function wireBomb(which, loId, hiId, secretId, peekId, randId, noteId){
+    const syncNote = () => {
+      const lo = parseInt($(loId).value, 10), hi = parseInt($(hiId).value, 10);
+      $(noteId).textContent = (Number.isInteger(lo) && Number.isInteger(hi) && hi - lo >= 2)
+        ? (S.randomArmed[which]
+            ? "Armed at random. Nobody has seen it — everyone can play."
+            : `Must sit strictly inside the range — ${lo + 1} to ${hi - 1}.`)
+        : "The range needs at least one number inside it, e.g. 1 to 100.";
+    };
+    $(peekId).addEventListener("click", () => {
+      const f = $(secretId), showing = f.type === "text";
+      f.type = showing ? "password" : "text";
+      $(peekId).textContent = showing ? "Show" : "Hide";
+      $(peekId).setAttribute("aria-pressed", String(!showing));
+    });
+    $(randId).addEventListener("click", () => {
+      const lo = parseInt($(loId).value, 10), hi = parseInt($(hiId).value, 10);
+      if (!Number.isInteger(lo) || !Number.isInteger(hi) || hi - lo < 2) return syncNote();
+      S.randomArmed[which] = true;
+      $(secretId).value = String(ENGINE.randomSecret(lo, hi));
+      $(secretId).type = "password";
+      $(peekId).textContent = "Show"; $(peekId).setAttribute("aria-pressed", "false");
+      $(randId).textContent = "Re-roll";
+      syncNote();
+    });
+    $(secretId).addEventListener("input", () => {
+      S.randomArmed[which] = false; $(randId).textContent = "Random"; syncNote();
+    });
+    $(loId).addEventListener("input", syncNote);
+    $(hiId).addEventListener("input", syncNote);
+    return {
+      sync: syncNote,
+      reset(){
+        S.randomArmed[which] = false;
+        $(secretId).value = ""; $(secretId).type = "password";
+        $(peekId).textContent = "Show"; $(peekId).setAttribute("aria-pressed", "false");
+        $(randId).textContent = "Random"; syncNote();
+      }
+    };
+  }
+
+  /** Reads and checks a setup form; returns null and shows why on failure. */
+  function readSetup({ loId, hiId, secretId, penaltyId, errId }){
+    const lo = parseInt($(loId).value, 10), hi = parseInt($(hiId).value, 10);
+    const penalty = $(penaltyId).value.trim() || ENGINE.PENALTIES[0];
+    if (!Number.isInteger(lo) || !Number.isInteger(hi)){ err(errId, "The range needs two whole numbers."); return null; }
+    if (hi - lo < 2){ err(errId, `No room in that range. The highest must be at least ${lo + 2}.`); return null; }
+    // Read the field, never re-roll: Random already filled it and the arming
+    // player may have peeked, so re-rolling would reveal a different number.
+    const secret = parseInt($(secretId).value, 10);
+    if (!Number.isInteger(secret)){ err(errId, "Set the bomb — type a number or tap Random."); return null; }
+    if (secret <= lo || secret >= hi){ err(errId, `The bomb has to sit strictly inside the range: ${lo + 1} to ${hi - 1}.`); return null; }
+    err(errId, "");
+    return { lo, hi, secret, penalty };
+  }
+
+  function startLocal(){
+    err("setupErr", "");
+    const names = readNames().filter(Boolean);
+    if (names.length < 2) return err("setupErr", "A game needs at least two named players.");
+    if (new Set(names.map(n => n.toLowerCase())).size !== names.length){
+      return err("setupErr", "Two players share a name — make them distinct so the log reads cleanly.");
+    }
+    const cfg = readSetup({ loId: "lRangeLo", hiId: "lRangeHi", secretId: "lSecret", penaltyId: "lPenalty", errId: "setupErr" });
+    if (!cfg) return;
+    store.set("nb.names", names);
+    store.set("nb.penalty", cfg.penalty);
+    store.set("nb.range", [cfg.lo, cfg.hi]);
+    try {
+      S.state = ENGINE.createGame({ players: names, ...cfg, mode: S.localMode });
+    } catch (e){ return err("setupErr", e.message); }
+    S.online = false; S.showingOver = false;
+    localBomb.reset();
+    err("playErr", "");
+    renderPlay(); show("Play"); $("guess").focus();
+  }
+
+  // ---------- turns ---------------------------------------------------------
+  async function submitGuess(){
+    const check = ENGINE.validateGuess(S.state, $("guess").value);
+    if (!check.ok){
+      err("playErr", check.reason);
+      $("guess").focus(); $("guess").select();
+      return;
+    }
+    if (S.online && !isMyTurn()) return err("playErr", "It's not your turn yet.");
+    err("playErr", "");
+
+    const before = { name: S.state.players[S.state.turn], guess: check.value };
+    const next = ENGINE.applyGuess(S.state, check.value);
+    $("guess").value = "";
+
+    if (S.online){
+      $("guessBtn").disabled = true;
+      try {
+        await S.db.doc("rooms/" + S.code).update({
+          lo: next.lo, hi: next.hi, turn: next.turn, history: next.history,
+          over: next.over, loser: next.loser, updatedAt: Date.now()
+        });
+        // The snapshot drives every device, this one included.
+      } catch (e){
+        err("playErr", dbMessage(e));
+      } finally { $("guessBtn").disabled = false; }
+      return;
+    }
+
+    S.state = next;
+    if (next.over){ endGame(); return; }
+    renderPlay();
+
+    if (S.localMode === "relay"){
+      const last = next.history[next.history.length - 1];
+      const v = $("relayVerdict");
+      $("relayWho").textContent = `${before.name} guessed ${before.guess}`;
+      if (last.side === "low"){ v.className = "verdict up"; v.textContent = "Too low — the floor moves up"; }
+      else { v.className = "verdict dn"; v.textContent = "Too high — the ceiling comes down"; }
+      const left = ENGINE.remaining(next);
+      $("relayRange").textContent = `Live range is now ${next.lo} – ${next.hi}, ${left} number${left === 1 ? "" : "s"} left. Next up: ${next.players[next.turn]}.`;
+      const linkable = canLinkShare();
+      $("relayCodeWrap").hidden = linkable;
+      $("relayCopy").textContent = linkable ? "Copy link" : "Copy code";
+      delete $("relayCopy").dataset.restore;
+      $("relayHow").textContent = linkable
+        ? "The link carries the live range and the bomb. Send it to the group and let the next player tap it."
+        : "This page can't hand out its own address, so the turn travels as a code. The next player pastes it into “Joining a game already running?” on the setup screen.";
+      if (!linkable) $("relayCode").value = turnCode();
+      show("Relay");
+    } else {
+      const deck = $("screenPlay");
+      if (!calm){ deck.classList.remove("pop"); void deck.offsetWidth; deck.classList.add("pop"); }
+      $("guess").focus();
+    }
+  }
+
+  async function doRematch(){
+    if (S.online){
+      if (!S.isHost) return;
+      const secret = ENGINE.randomSecret(S.state.lo0, S.state.hi0);
+      const next = ENGINE.rematch(S.state, secret);
+      try {
+        await S.db.doc("rooms/" + S.code).update({
+          lo: next.lo, hi: next.hi, bomb: ENGINE.hideNumber(secret),
+          turn: next.turn, history: [], over: false, loser: null, updatedAt: Date.now()
+        });
+        S.showingOver = false;
+      } catch (e){ err("playErr", dbMessage(e)); }
+      return;
+    }
+    S.state = ENGINE.rematch(S.state, ENGINE.randomSecret(S.state.lo0, S.state.hi0));
+    S.showingOver = false;
+    err("playErr", "");
+    renderPlay(); show("Play"); $("guess").focus();
+  }
+
+  // ---------- resume a relay link ------------------------------------------
+  function adopt(incoming){
+    if (!incoming) return false;
+    S.online = false; S.state = incoming;
+    S.localMode = incoming.mode === "relay" ? "relay" : "pass";
+    S.showingOver = false;
+    err("playErr", "");
+    if (incoming.over) endGame(); else { renderPlay(); show("Play"); $("guess").focus(); }
+    return true;
+  }
+  function resumeFromLink(){
+    const m = location.hash.match(/^#s=(.+)$/);
+    if (!m) return false;
+    const incoming = readToken(m[1]);
+    if (!incoming) return false;
+    try { history.replaceState(null, "", baseUrl()); } catch { /* sandboxed */ }
+    return adopt(incoming);
+  }
+
+  // ---------- wiring --------------------------------------------------------
+  renderChips("penaltyChips", "penalty");
+  renderChips("lPenaltyChips", "lPenalty");
+  renderRoster(store.get("nb.names", DEFAULT_NAMES));
+  const savedPenalty = store.get("nb.penalty", null);
+  if (savedPenalty){ $("penalty").value = savedPenalty; $("lPenalty").value = savedPenalty; }
+  const savedRange = store.get("nb.range", null);
+  if (Array.isArray(savedRange) && savedRange.length === 2){
+    $("rangeLo").value = savedRange[0]; $("rangeHi").value = savedRange[1];
+    $("lRangeLo").value = savedRange[0]; $("lRangeHi").value = savedRange[1];
+  }
+  const savedName = store.get("nb.myname", "");
+  if (savedName){ $("hostName").value = savedName; $("joinName").value = savedName; }
+
+  const hostBomb = wireBomb("host", "rangeLo", "rangeHi", "secret", "peek", "randomise", "secretNote");
+  const localBomb = wireBomb("local", "lRangeLo", "lRangeHi", "lSecret", "lPeek", "lRandomise", "lSecretNote");
+  hostBomb.sync(); localBomb.sync();
+
+  $("goHost").addEventListener("click", () => { err("hostErr", ""); show("Host"); $("hostName").focus(); });
+  $("goJoin").addEventListener("click", () => { err("joinErr", ""); show("Join"); $("joinCode").focus(); });
+  $("goLocal").addEventListener("click", () => { err("setupErr", ""); show("Local"); });
+  $("hostBack").addEventListener("click", () => renderHome());
+  $("joinBack").addEventListener("click", () => renderHome());
+  $("localBack").addEventListener("click", () => renderHome());
+  $("resumeLast").addEventListener("click", async () => {
+    const code = store.get("nb.room", null);
+    if (!code) return;
+    try {
+      const snap = await S.db.doc("rooms/" + code).get();
+      if (!snap.exists){ store.drop("nb.room"); return renderHome("That room is gone."); }
+      enterRoom(code, snap.data().hostId === seatId);
+    } catch (e){ renderHome(dbMessage(e)); }
+  });
+
+  $("createBtn").addEventListener("click", async () => {
+    const name = $("hostName").value.trim();
+    if (!name) return err("hostErr", "Put your name in so the group knows whose turn is whose.");
+    const cfg = readSetup({ loId: "rangeLo", hiId: "rangeHi", secretId: "secret", penaltyId: "penalty", errId: "hostErr" });
+    if (!cfg) return;
+    if (!S.db) return err("hostErr", "Synced play isn't available in this view.");
+    store.set("nb.myname", name);
+    store.set("nb.penalty", cfg.penalty);
+    store.set("nb.range", [cfg.lo, cfg.hi]);
+    $("createBtn").disabled = true;
+    $("createBtn").innerHTML = '<span class="spin">◠</span> Opening the room…';
+    try {
+      const code = await mintCode();
+      await S.db.doc("rooms/" + code).set({
+        v: ENGINE.VERSION, code, phase: "lobby", hostId: seatId, mode: "online",
+        lo0: cfg.lo, hi0: cfg.hi, lo: cfg.lo, hi: cfg.hi,
+        bomb: ENGINE.hideNumber(cfg.secret), penalty: cfg.penalty,
+        players: [], seats: [], turn: 0, history: [], over: false, loser: null,
+        createdAt: Date.now(), updatedAt: Date.now()
+      });
+      await S.db.doc(`rooms/${code}/seats/${seatId}`).set({ name, joinedAt: Date.now() });
+      hostBomb.reset();
+      enterRoom(code, true);
+    } catch (e){
+      err("hostErr", e && e.code ? dbMessage(e) : (e.message || "Couldn't open the room."));
+    } finally {
+      $("createBtn").disabled = false;
+      $("createBtn").textContent = "Open the room";
+    }
+  });
+
+  $("joinBtn").addEventListener("click", async () => {
+    const code = $("joinCode").value.trim().toUpperCase();
+    const name = $("joinName").value.trim();
+    if (!/^[A-Z0-9]{4}$/.test(code)) return err("joinErr", "A room code is four letters and numbers.");
+    if (!name) return err("joinErr", "Put your name in so the group knows whose turn is whose.");
+    if (!S.db) return err("joinErr", "Synced play isn't available in this view.");
+    store.set("nb.myname", name);
+    $("joinBtn").disabled = true;
+    try {
+      const snap = await S.db.doc("rooms/" + code).get();
+      if (!snap.exists) return err("joinErr", "No room with that code. Check the letters and try again.");
+      const d = snap.data();
+      const alreadySeated = Array.isArray(d.seats) && d.seats.includes(seatId);
+      if (d.phase !== "lobby" && !alreadySeated){
+        return err("joinErr", "That game already started. Ask them to deal you in next round.");
+      }
+      if (d.phase === "lobby"){
+        await S.db.doc(`rooms/${code}/seats/${seatId}`).set({ name, joinedAt: Date.now() });
+      }
+      err("joinErr", "");
+      enterRoom(code, d.hostId === seatId);
+    } catch (e){
+      err("joinErr", dbMessage(e));
+    } finally { $("joinBtn").disabled = false; }
+  });
+  $("joinCode").addEventListener("input", e => {
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+    err("joinErr", "");
+  });
+
+  $("startBtn").addEventListener("click", async () => {
+    if (S.seats.length < 2) return err("lobbyErr", "Need at least two people at the table.");
+    if (S.seats.length > ENGINE.MAX_PLAYERS) return err("lobbyErr", `At most ${ENGINE.MAX_PLAYERS} players.`);
+    $("startBtn").disabled = true;
+    try {
+      await S.db.doc("rooms/" + S.code).update({
+        phase: "playing",
+        seats: S.seats.map(s => s.id),
+        players: S.seats.map(s => s.name),
+        turn: 0, history: [], over: false, loser: null, updatedAt: Date.now()
+      });
+      err("lobbyErr", "");
+    } catch (e){ err("lobbyErr", dbMessage(e)); $("startBtn").disabled = false; }
+  });
+  $("copyCode").addEventListener("click", e => copy(S.code, e.currentTarget));
+  $("inviteBtn").addEventListener("click", e => openWhatsApp(inviteMessage(), e.currentTarget));
+  $("leaveLobby").addEventListener("click", () => leaveRoom());
+  $("nudgeBtn").addEventListener("click", e => openWhatsApp(nudgeMessage(), e.currentTarget));
+
+  $("localStart").addEventListener("click", startLocal);
+  $("addPlayer").addEventListener("click", () => {
+    const names = readNames();
+    if (names.length >= ENGINE.MAX_PLAYERS) return err("setupErr", `${ENGINE.MAX_PLAYERS} players is the cap — the range would run out.`);
+    err("setupErr", "");
+    names.push(""); renderRoster(names);
+    const inputs = $("roster").querySelectorAll('input[type="text"]');
+    inputs[inputs.length - 1].focus();
+  });
+  $("modeSeg").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-mode]");
+    if (!btn) return;
+    S.localMode = btn.dataset.mode;
+    Array.from($("modeSeg").children).forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+    $("modeNote").textContent = S.localMode === "pass"
+      ? "One device goes round the table. Nothing to install."
+      : "Each player uses their own phone. After a guess you get a code to drop in the group chat.";
+  });
+  $("resumeBtn").addEventListener("click", () => {
+    const incoming = readToken($("resumeCode").value);
+    if (!incoming) return err("resumeErr", "That code didn't read as a game. Copy the whole thing and try again.");
+    err("resumeErr", ""); $("resumeCode").value = ""; adopt(incoming);
+  });
+  $("resumeCode").addEventListener("keydown", e => { if (e.key === "Enter") $("resumeBtn").click(); });
+  $("resumeCode").addEventListener("input", () => err("resumeErr", ""));
+
+  $("guessBtn").addEventListener("click", submitGuess);
+  $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
+  $("guess").addEventListener("input", () => err("playErr", ""));
+  $("abandon").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });
+
+  $("relaySend").addEventListener("click", e => openWhatsApp(turnMessage(), e.currentTarget));
+  $("relayCopy").addEventListener("click", e => copy(turnHandoff(), e.currentTarget));
+  $("relayStay").addEventListener("click", () => { renderPlay(); show("Play"); $("guess").focus(); });
+
+  $("shareResult").addEventListener("click", e => openWhatsApp(resultMessage(), e.currentTarget));
+  $("rematch").addEventListener("click", doRematch);
+  $("newGame").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });
+
+  window.addEventListener("hashchange", () => { resumeFromLink(); });
+  window.addEventListener("beforeunload", stopSubs);
+
+  // ---------- boot ----------------------------------------------------------
+  // The page renders and plays before any capability answers; synced rooms
+  // light up if and when the store resolves.
+  function boot(){
+    if (!resumeFromLink()) renderHome();
+  }
+  boot();
+
+  (async () => {
+    try {
+      const fb = await connectFirebase();
+      if (fb){
+        S.db = fb.db;
+        S.backend = "firebase";
+        // The rules key a seat to the signed-in player, so the uid IS the seat.
+        seatId = fb.uid;
+      }
+    } catch (e){
+      S.db = null;
+      S.bootError = "Couldn't reach the room server. Pass the phone still works.";
+    }
+    if (!S.db){
+      try {
+        const cap = (window.claude && window.claude.use) ? await window.claude.use("db") : null;
+        if (cap){ S.db = cap; S.backend = "artifact"; }
+      } catch { S.db = null; }
+    }
+    S.probed = true;
+    if (!$("screenHome").hidden) renderHome(S.bootError || "");
+  })();
+})();
+</script>
+</body>
+</html>

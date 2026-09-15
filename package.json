@@ -1,0 +1,20 @@
+{
+  "name": "number-bomb",
+  "version": "2.1.0",
+  "private": true,
+  "description": "A turn-based party game for a group chat. Guess inside a shrinking range; whoever hits the hidden number pays the forfeit.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "npm run test:engine && npm run test:rules",
+    "test:engine": "node --test engine.test.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-number-bomb \"node --test firestore.rules.test.mjs\"",
+    "deploy": "firebase deploy --only hosting,firestore:rules",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "serve": "npx --yes http-server . -p 8080 -c-1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "firebase-tools": "^13.0.0"
+  }
+}
