@@ -33,6 +33,12 @@ guesses are 31–54. Guessing a bound is refused and does **not** cost your turn
 - guess > bomb → the guess becomes the new ceiling
 - guess == bomb → detonation, game over
 
+The reel that shows the spin is cosmetic, but `spinReel()` owns the order of
+faces it walks and where it stops, so that a test can prove it stops on the
+outcome that was drawn. It shipped once not doing that — a fixed twelve frames
+over three faces stops on face three every time — which hid the real result for
+a beat and made Skip look roughly twice as common as its 25%.
+
 Since v3 every turn opens with a **lucky spin**, drawn on the phone that is up:
 `normal` (50%) buys one guess, `double` (25%) buys two taken back to back with
 no second spin, `skip` (25%) buys none and hands the turn straight on. A skip is
@@ -156,7 +162,7 @@ SPINS  SPIN_ODDS  SPIN_GUESSES
 remaining()      createGame()   validateGuess()  applyGuess()  rematch()
 randomSecret()   newRoomCode()  encodeState()    decodeState() isValidState()
 toDoc()          fromDoc()      hideNumber()     showNumber()
-randomSpin()     applySpin()    endSkip()
+randomSpin()     spinReel()     applySpin()    endSkip()
 ```
 
 ### Playable state shape

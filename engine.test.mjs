@@ -530,3 +530,52 @@ test("remaining() is hi minus lo minus one at the edge", () => {
   assert.equal(ENGINE.remaining({ lo: 30, hi: 32 }), 1, "30–32 leaves only 31");
   assert.equal(ENGINE.remaining({ lo: 30, hi: 31 }), 0, "adjacent bounds leave nothing");
 });
+
+// --- the reel ---------------------------------------------------------------
+// The reel is cosmetic, but it is the only thing most players ever see of the
+// draw. A reel that stops somewhere other than the drawn outcome misreports
+// the game: it hides the real result for a beat, and makes whichever face it
+// always stops on look far more common than it is.
+
+test("the reel stops on the outcome that was actually drawn", () => {
+  for (const outcome of ENGINE.SPINS){
+    const faces = ENGINE.spinReel(outcome);
+    assert.equal(faces[faces.length - 1], outcome, `reel for "${outcome}" must end on it`);
+  }
+});
+
+test("the reel always opens on the same face, so it gives nothing away", () => {
+  const firsts = ENGINE.SPINS.map(o => ENGINE.spinReel(o)[0]);
+  assert.deepEqual(firsts, [ENGINE.SPINS[0], ENGINE.SPINS[0], ENGINE.SPINS[0]],
+    "a reel that starts differently per outcome telegraphs the result");
+});
+
+test("the reel shows only real faces, in order, and passes each one", () => {
+  for (const outcome of ENGINE.SPINS){
+    const faces = ENGINE.spinReel(outcome);
+    assert.ok(faces.every(f => ENGINE.SPINS.includes(f)), "no invented faces");
+    assert.equal(new Set(faces).size, ENGINE.SPINS.length, "every face is shown");
+    faces.forEach((f, i) => {
+      assert.equal(f, ENGINE.SPINS[i % ENGINE.SPINS.length], "faces run in order");
+    });
+  }
+});
+
+test("the reel is long enough to read as a spin, and bounded", () => {
+  for (const outcome of ENGINE.SPINS){
+    const n = ENGINE.spinReel(outcome).length;
+    assert.ok(n >= 2 * ENGINE.SPINS.length, `${outcome}: ${n} frames is not a spin`);
+    assert.ok(n <= 24, `${outcome}: ${n} frames keeps the player waiting`);
+  }
+  // a shorter reel still has to land correctly
+  for (const outcome of ENGINE.SPINS){
+    const faces = ENGINE.spinReel(outcome, 1);
+    assert.equal(faces[faces.length - 1], outcome);
+  }
+});
+
+test("the reel refuses an outcome the wheel does not have", () => {
+  for (const junk of ["", "SKIP", "jackpot", null, 2]){
+    assert.throws(() => ENGINE.spinReel(junk), /isn't a spin outcome/);
+  }
+});
