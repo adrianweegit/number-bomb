@@ -144,6 +144,11 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .btn--ghost:active{transform:translateY(1px)}
 .btn--wide{width:100%}
 .btn--sm{padding:9px 12px;font-size:13px;box-shadow:2px 2px 0 var(--ink)}
+.btn--doom{background:var(--accent);color:#fff;padding-block:16px;font-size:18px}
+@media (prefers-reduced-motion: no-preference){
+  .btn--doom{animation:doom 1.6s ease-in-out infinite}
+  @keyframes doom{0%,100%{box-shadow:var(--drop-sm)}50%{box-shadow:5px 5px 0 var(--ink)}}
+}
 .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
 
 /* ---------- roster ---------- */
@@ -739,6 +744,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
       <input type="text" id="sayIt" maxlength="80" autocomplete="off"
              placeholder="Trash talk (optional)" aria-label="Optional message with your turn">
     </div>
+    <button class="btn btn--primary btn--wide btn--doom" id="wireBtn" type="button" hidden>Cut the wire</button>
     <button class="btn btn--wide" id="skipBtn" type="button" hidden>Sit it out &amp; pass it on</button>
     <button class="btn btn--wa btn--wide" id="nudgeBtn" type="button" hidden>Nudge them on WhatsApp</button>
     <p class="err" id="playErr" hidden></p>
@@ -998,6 +1004,26 @@ const ENGINE = (() => {
     return next;
   }
 
+  /**
+   * Which control the player who is up is waiting on.
+   *
+   * The wheel always comes first. A skip drawn with one number left is a real
+   * reprieve — the bomb moves on to the next player instead — so firing the
+   * last number before the spin would quietly delete the best thing the wheel
+   * can do. That ordering is why this is a tested function rather than a
+   * condition buried in the page.
+   *
+   * "wire" means the range is down to its last number. By the invariant above
+   * that number is the bomb, so nothing is left to choose: the page offers one
+   * button instead of asking for a guess it already knows the answer to.
+   */
+  function turnControl(state){
+    if (!state || state.over) return "none";
+    if (state.spin === "") return "spin";
+    if (state.spin === "skip") return "skip";
+    return remaining(state) === 1 ? "wire" : "guess";
+  }
+
   /** Fresh game, same crew and stakes; the loser's neighbour leads off. */
   function rematch(state, secret){
     const base = createGame({
@@ -1115,7 +1141,7 @@ const ENGINE = (() => {
     VERSION, MAX_PLAYERS, MAX_MESSAGE, MODES, PENALTIES, CODE_ALPHABET,
     SPINS, SPIN_ODDS, SPIN_GUESSES,
     remaining, createGame, validateGuess, applyGuess, rematch, randomSecret,
-    randomSpin, spinReel, applySpin, endSkip,
+    randomSpin, spinReel, applySpin, endSkip, turnControl,
     newRoomCode, encodeState, decodeState, isValidState, toDoc, fromDoc,
     hideNumber, showNumber
   };
@@ -1497,9 +1523,14 @@ const ENGINE = (() => {
     if (st.spin === "") return yours
       ? "Spin first — the wheel decides what kind of turn you get."
       : `${who} has to spin before they can guess.`;
-    if (st.spin === "skip") return yours
-      ? "Sit this one out. Say your piece on the way past, if you must."
-      : `${who} spun straight out of this turn.`;
+    if (st.spin === "skip"){
+      if (ENGINE.remaining(st) === 1) return yours
+        ? `The wheel just saved your life. ${st.lo + 1} is still out there.`
+        : `${who} just dodged ${st.lo + 1}. Somebody else has to take it.`;
+      return yours
+        ? "Sit this one out. Say your piece on the way past, if you must."
+        : `${who} spun straight out of this turn.`;
+    }
     if (st.spin === "double") return st.left === 2
       ? (yours ? "Two guesses, both yours, and no second spin. Good luck."
                : `${who} owes two guesses this turn.`)
@@ -1514,9 +1545,11 @@ const ENGINE = (() => {
     const st = S.state;
     if (!st || st.over) return;
     if (S.online && !isMyTurn()) return;
-    if (st.spin === "") $("spinBtn").focus();
-    else if (st.spin === "skip") $("skipBtn").focus();
-    else $("guess").focus();
+    const control = ENGINE.turnControl(st);
+    if (control === "spin") $("spinBtn").focus();
+    else if (control === "skip") $("skipBtn").focus();
+    else if (control === "wire") $("wireBtn").focus();
+    else if (control === "guess") $("guess").focus();
   }
 
   function renderLog(host){
@@ -1562,8 +1595,12 @@ const ENGINE = (() => {
     const rangeLine = st.lo + 2 === st.hi
       ? `Only ${st.lo + 1} is left. We both know how this ends.`
       : `Pick a number between ${st.lo + 1} and ${st.hi - 1}.`;
+    // One number left outranks Double Trouble: promising two guesses when only
+    // one number exists reads as a bug, and the second is never taken anyway.
     const turnLine = !spun ? "Pull the lever before you guess."
-      : st.spin === "skip" ? "The wheel says sit this one out."
+      : st.spin === "skip" ? (left === 1 ? "Saved. That was the last number."
+                                          : "The wheel says sit this one out.")
+      : left === 1 ? rangeLine
       : st.spin === "double" && st.left === 2 ? `Two guesses this turn. ${rangeLine}`
       : rangeLine;
 
@@ -1615,11 +1652,21 @@ const ENGINE = (() => {
       $("spinNote").textContent = spinNote(st, yours);
       $("spinBtn").hidden = spun || !yours;
     }
-    $("guessBlock").hidden = !yours || !spun || st.spin === "skip";
+    // The engine decides which control the turn is waiting on; the page only
+    // shows it. "wire" is the last number — nothing to type, one button.
+    const control = yours ? ENGINE.turnControl(st) : "none";
+    $("guessBlock").hidden = control !== "guess";
+    $("wireBtn").hidden = control !== "wire";
+    $("skipBtn").hidden = control !== "skip";
     $("sayBlock").hidden = !yours || !spun;
-    $("skipBtn").hidden = !yours || st.spin !== "skip";
+    if (control === "wire") $("wireBtn").textContent = `Cut the wire — ${st.lo + 1}`;
     $("nudgeBtn").hidden = !(S.online && !mine);
-    if (S.tauntTurn !== st.history.length && !$("sayIt").value){
+    if (control === "wire"){
+      // The typing this button replaced was the beat where people said
+      // something. Hand that beat back rather than losing it.
+      S.tauntTurn = st.history.length;
+      $("sayIt").placeholder = "Any last words?";
+    } else if (S.tauntTurn !== st.history.length && !$("sayIt").value){
       S.tauntTurn = st.history.length;
       $("sayIt").placeholder = pickTaunt();
     }
@@ -2153,11 +2200,17 @@ const ENGINE = (() => {
     show("Relay");
   }
 
-  async function submitGuess(){
-    const check = ENGINE.validateGuess(S.state, $("guess").value);
+  /**
+   * `forced` is the last-number button: the same move, minus the typing. It is
+   * only ever a number — anything else means this was wired to an event
+   * listener bare, and the box is what should be read.
+   */
+  async function submitGuess(forced){
+    const typed = typeof forced === "number" ? forced : $("guess").value;
+    const check = ENGINE.validateGuess(S.state, typed);
     if (!check.ok){
       err("playErr", check.reason);
-      $("guess").focus(); $("guess").select();
+      if (!$("guessBlock").hidden){ $("guess").focus(); $("guess").select(); }
       return;
     }
     if (S.online && !isMyTurn()) return err("playErr", "It's not your turn yet.");
@@ -2173,6 +2226,7 @@ const ENGINE = (() => {
 
     if (S.online){
       $("guessBtn").disabled = true;
+      $("wireBtn").disabled = true;
       try {
         await S.db.doc("rooms/" + S.code).update({
           lo: next.lo, hi: next.hi, turn: next.turn, history: next.history,
@@ -2182,7 +2236,7 @@ const ENGINE = (() => {
         // The snapshot drives every device, this one included.
       } catch (e){
         err("playErr", dbMessage(e));
-      } finally { $("guessBtn").disabled = false; }
+      } finally { $("guessBtn").disabled = false; $("wireBtn").disabled = false; }
       return;
     }
 
@@ -2398,11 +2452,19 @@ const ENGINE = (() => {
 
   $("spinBtn").addEventListener("click", doSpin);
   $("skipBtn").addEventListener("click", passSkip);
-  $("guessBtn").addEventListener("click", submitGuess);
+  // The last number is the bomb, so there is nothing to type — but the player
+  // still has to be the one who does it.
+  $("wireBtn").addEventListener("click", () => submitGuess(S.state.lo + 1));
+  // Wrapped, not passed bare: a bare reference hands the click Event to
+  // submitGuess as its forced number.
+  $("guessBtn").addEventListener("click", () => submitGuess());
   $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
   $("sayIt").addEventListener("keydown", e => {
-    if (e.key !== "Enter") return;
-    if (S.state && S.state.spin === "skip") passSkip(); else submitGuess();
+    if (e.key !== "Enter" || !S.state) return;
+    const control = ENGINE.turnControl(S.state);
+    if (control === "skip") passSkip();
+    else if (control === "wire") submitGuess(S.state.lo + 1);
+    else submitGuess();
   });
   $("guess").addEventListener("input", () => { err("playErr", ""); renderOdds(); });
   $("abandon").addEventListener("click", () => { if (S.online) leaveRoom(); else { S.state = null; renderHome(); } });

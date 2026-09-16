@@ -33,6 +33,15 @@ guesses are 31–54. Guessing a bound is refused and does **not** cost your turn
 - guess > bomb → the guess becomes the new ceiling
 - guess == bomb → detonation, game over
 
+When the range is down to one number, that number is the bomb, so the page
+stops asking for a guess it already knows and offers a single button instead
+(`Cut the wire — 43`). `turnControl()` decides that, and it is a tested engine
+function rather than a condition in the page for one reason: **the spin comes
+first**. A skip drawn with one number left is a real reprieve — the bomb moves
+to the next player — and firing the last number before the spin would silently
+delete it. The player still presses the button; the forfeit sticks better when
+somebody did it than when the game did it to them.
+
 The reel that shows the spin is cosmetic, but `spinReel()` owns the order of
 faces it walks and where it stops, so that a test can prove it stops on the
 outcome that was drawn. It shipped once not doing that — a fixed twelve frames
@@ -162,7 +171,7 @@ SPINS  SPIN_ODDS  SPIN_GUESSES
 remaining()      createGame()   validateGuess()  applyGuess()  rematch()
 randomSecret()   newRoomCode()  encodeState()    decodeState() isValidState()
 toDoc()          fromDoc()      hideNumber()     showNumber()
-randomSpin()     spinReel()     applySpin()    endSkip()
+randomSpin()     spinReel()     applySpin()    endSkip()   turnControl()
 ```
 
 ### Playable state shape

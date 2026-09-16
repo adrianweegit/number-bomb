@@ -579,3 +579,87 @@ test("the reel refuses an outcome the wheel does not have", () => {
     assert.throws(() => ENGINE.spinReel(junk), /isn't a spin outcome/);
   }
 });
+
+// --- the last number --------------------------------------------------------
+// When one legal number is left it is the bomb, so there is nothing to choose
+// and the page offers a button instead of a guess box. The risk in that feature
+// is the ordering: fire it before the spin and a skip can no longer save
+// anybody, which silently removes the best thing the wheel does.
+
+const oneLeft = () => {
+  // 40–42 leaves exactly 41, and 41 is the bomb.
+  let s = game({ secret: 41 });
+  s = play(s, 40);
+  s = play(s, 42);
+  return s;
+};
+
+test("one number left means that number is the bomb", () => {
+  // The button is only safe because of this. Squeeze the range shut from both
+  // sides for every bomb position in the range and check it holds each time.
+  // (Walking up from the floor never gets here — it detonates on the way.)
+  for (let secret = 2; secret <= 99; secret++){
+    let s = game({ secret });
+    if (secret - 1 > s.lo) s = play(s, secret - 1);
+    if (secret + 1 < s.hi) s = play(s, secret + 1);
+    assert.equal(s.over, false, `secret ${secret}: neither squeeze should be fatal`);
+    assert.equal(ENGINE.remaining(s), 1, `secret ${secret}: one number should be left`);
+    assert.equal(s.lo + 1, s.secret, `secret ${secret}: the last number must be the bomb`);
+  }
+});
+
+test("the wheel still comes first with one number left", () => {
+  const s = oneLeft();
+  assert.equal(ENGINE.remaining(s), 1);
+  assert.equal(s.spin, "", "a fresh turn has not spun yet");
+  assert.equal(ENGINE.turnControl(s), "spin",
+    "firing the last number before the spin would delete the skip reprieve");
+});
+
+test("a skip with one number left is a reprieve, not a detonation", () => {
+  const s = ENGINE.applySpin(oneLeft(), "skip");
+  assert.equal(ENGINE.turnControl(s), "skip");
+  const next = ENGINE.endSkip(s);
+  assert.equal(next.over, false, "nobody blew up");
+  assert.deepEqual([next.lo, next.hi], [40, 42], "the number is still out there");
+  assert.equal(next.turn, (s.turn + 1) % s.players.length,
+    "and it is the next player's problem now");
+  assert.equal(ENGINE.turnControl(next), "spin", "who also gets to spin first");
+});
+
+test("after a real spin, one number left is the wire", () => {
+  for (const outcome of ["normal", "double"]){
+    const s = ENGINE.applySpin(oneLeft(), outcome);
+    assert.equal(ENGINE.turnControl(s), "wire", `${outcome} with one number left`);
+    // and the button's number is a legal move that detonates
+    const boom = ENGINE.applyGuess(s, s.lo + 1);
+    assert.equal(boom.over, true);
+    assert.equal(boom.loser, s.turn);
+    assert.equal(boom.history[boom.history.length - 1].side, "boom");
+  }
+});
+
+test("more than one number left is still a guess", () => {
+  const s = ENGINE.applySpin(game(), "normal");
+  assert.ok(ENGINE.remaining(s) > 1);
+  assert.equal(ENGINE.turnControl(s), "guess");
+});
+
+test("Double Trouble can narrow the range onto its own wire", () => {
+  let s = ENGINE.applySpin(game({ secret: 41 }), "double");
+  s = ENGINE.applyGuess(s, 40);
+  assert.equal(ENGINE.turnControl(s), "guess", "two numbers left, still a guess");
+  s = ENGINE.applyGuess(s, 42);
+  // the second guess of the pair closed the range onto the bomb — but the pair
+  // is spent, so the turn moved on and the next player spins for it
+  assert.equal(ENGINE.remaining(s), 1);
+  assert.equal(s.turn, 1);
+  assert.equal(ENGINE.turnControl(s), "spin");
+});
+
+test("a finished game is waiting on nothing", () => {
+  const s = ENGINE.applyGuess(ENGINE.applySpin(oneLeft(), "normal"), 41);
+  assert.equal(s.over, true);
+  assert.equal(ENGINE.turnControl(s), "none");
+  assert.equal(ENGINE.turnControl(null), "none");
+});

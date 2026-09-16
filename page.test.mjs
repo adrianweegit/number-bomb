@@ -27,3 +27,18 @@ test("og.png exists and is under 300 KB", () => {
   assert.ok(bytes > 0, "og.png must not be empty");
   assert.ok(bytes < 300 * 1024, `og.png is ${(bytes / 1024).toFixed(0)} KB, over the 300 KB budget`);
 });
+
+test("handlers that take an argument are not wired to listeners bare", () => {
+  // submitGuess(forced) is called both from the guess box and from the
+  // last-number button. Passed to addEventListener bare, the click Event
+  // arrives as `forced` and the guess becomes "[object MouseEvent]" — the
+  // Guess button stops working while Enter still does, which is easy to miss.
+  const bare = [...html.matchAll(/addEventListener\("click",\s*([A-Za-z_$][\w$]*)\s*\)/g)]
+    .map(m => m[1]);
+  for (const fn of bare){
+    const sig = html.match(new RegExp(`function ${fn}\\(([^)]*)\\)`));
+    assert.ok(sig, `could not find function ${fn}`);
+    assert.equal(sig[1].trim(), "",
+      `${fn} takes an argument, so it must be wrapped: () => ${fn}()`);
+  }
+});
