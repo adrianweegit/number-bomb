@@ -28,6 +28,20 @@ test("og.png exists and is under 300 KB", () => {
   assert.ok(bytes < 300 * 1024, `og.png is ${(bytes / 1024).toFixed(0)} KB, over the 300 KB budget`);
 });
 
+test("the wheel is one control, not a display with a button beside it", () => {
+  // It shipped as a display with the real control underneath, and players kept
+  // pressing the display — it has a border, a shadow and the largest target on
+  // the screen, so of course they did. The two are merged; keep them merged.
+  const tag = html.match(/<button[^>]*id="spinBtn"[^>]*>/);
+  assert.ok(tag, "#spinBtn must be a <button>");
+  assert.match(tag[0], /class="[^"]*\bspinner\b/, "and it must be the wheel itself");
+  assert.equal(count('class="spinner"'), 1, "exactly one wheel on the page");
+  assert.equal(count('id="spinner"'), 0, "the old separate display must be gone");
+  // The face flickers all through the reel, so it must not be announced.
+  assert.match(html, /id="spinWord"[^>]*aria-hidden="true"/,
+    "the reeling word has to stay out of the accessibility tree");
+});
+
 test("handlers that take an argument are not wired to listeners bare", () => {
   // submitGuess(forced) is called both from the guess box and from the
   // last-number button. Passed to addEventListener bare, the click Event

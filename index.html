@@ -290,12 +290,24 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 
 /* ---------- lucky spin ---------- */
 .spin-rig{display:flex;flex-direction:column;gap:10px}
+/* The window is the lever. It was a display with a button underneath, and
+   players kept pressing the display — which is the clearest possible signal
+   that it should have been the control. */
 .spinner{
-  display:flex;align-items:center;justify-content:center;min-height:62px;padding:12px 14px;
+  display:flex;align-items:center;justify-content:center;width:100%;min-height:62px;
+  padding:12px 14px;margin:0;
   border:var(--edge) solid var(--ink);border-radius:14px;box-shadow:var(--drop-sm);
   background:repeating-linear-gradient(-45deg,var(--panel-2) 0 12px,var(--panel) 12px 24px);
-  text-align:center;overflow:hidden;
+  text-align:center;overflow:hidden;font:inherit;color:inherit;
+  -webkit-appearance:none;appearance:none;
+  transition:transform .1s ease, box-shadow .1s ease;
 }
+/* Waiting to be pulled: deeper shadow, and it presses. */
+.spinner:enabled{cursor:pointer;box-shadow:var(--drop)}
+.spinner:enabled:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--grape)}
+/* Pulled: a readout, not a control. It must not dim the way a spent button
+   normally would — the result is the whole point of it. */
+.spinner:disabled{cursor:default;opacity:1}
 .spin-word{
   font:400 17px/1.15 Bungee,Impact,sans-serif;letter-spacing:.02em;color:var(--ink);
   overflow-wrap:anywhere;
@@ -724,11 +736,12 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 
     <div class="spin-rig" id="spinBlock">
       <span class="label">Lucky spin</span>
-      <div class="spinner" id="spinner" data-spin="idle">
-        <span class="spin-word" id="spinWord">LUCKY SPIN</span>
-      </div>
-      <p class="hint" id="spinNote" aria-live="polite">Spin first &mdash; the wheel decides what kind of turn you get.</p>
-      <button class="btn btn--primary btn--wide" id="spinBtn" type="button">Pull the lever</button>
+      <button class="spinner" id="spinBtn" type="button" data-spin="idle" aria-label="Pull the lever">
+        <!-- The word flickers through the reel, so it is hidden from screen
+             readers; the button's label and the note below carry the meaning. -->
+        <span class="spin-word" id="spinWord" aria-hidden="true">PULL THE LEVER</span>
+      </button>
+      <p class="hint" id="spinNote" aria-live="polite">It decides what kind of turn you get.</p>
     </div>
 
     <div id="guessBlock">
@@ -1521,8 +1534,8 @@ const ENGINE = (() => {
   function spinNote(st, yours){
     const who = st.players[st.turn];
     if (st.spin === "") return yours
-      ? "Spin first — the wheel decides what kind of turn you get."
-      : `${who} has to spin before they can guess.`;
+      ? "It decides what kind of turn you get."
+      : `${who} has to pull the lever before they can guess.`;
     if (st.spin === "skip"){
       if (ENGINE.remaining(st) === 1) return yours
         ? `The wheel just saved your life. ${st.lo + 1} is still out there.`
@@ -1647,10 +1660,14 @@ const ENGINE = (() => {
 
     // The wheel is visible to the whole room; only the player who is up can pull it.
     if (!S.spinning){
-      $("spinner").dataset.spin = spun ? st.spin : "idle";
-      $("spinWord").textContent = spun ? SPIN_LABEL[st.spin] : "LUCKY SPIN";
+      // Idle, it invites the player who is up to pull it and tells everyone
+      // else what they are waiting for. Pulled, it is the result.
+      const face = spun ? SPIN_LABEL[st.spin] : (yours ? "PULL THE LEVER" : "LUCKY SPIN");
+      $("spinBtn").dataset.spin = spun ? st.spin : "idle";
+      $("spinBtn").disabled = spun || !yours;
+      $("spinBtn").setAttribute("aria-label", face);
+      $("spinWord").textContent = face;
       $("spinNote").textContent = spinNote(st, yours);
-      $("spinBtn").hidden = spun || !yours;
     }
     // The engine decides which control the turn is waiting on; the page only
     // shows it. "wire" is the last number — nothing to type, one button.
@@ -2093,7 +2110,7 @@ const ENGINE = (() => {
     if (calm) return Promise.resolve();
     const faces = ENGINE.spinReel(outcome);
     return new Promise(resolve => {
-      const box = $("spinner"), word = $("spinWord");
+      const box = $("spinBtn"), word = $("spinWord");
       box.dataset.spin = "rolling";
       let i = 0, wait = 45;
       (function step(){
@@ -2111,10 +2128,11 @@ const ENGINE = (() => {
    * set, and puts the wheel back to idle if the write then fails.
    */
   function landSpin(state){
-    $("spinner").dataset.spin = state.spin;
+    $("spinBtn").dataset.spin = state.spin;
+    $("spinBtn").disabled = true;
+    $("spinBtn").setAttribute("aria-label", SPIN_LABEL[state.spin]);
     $("spinWord").textContent = SPIN_LABEL[state.spin];
     $("spinNote").textContent = spinNote(state, true);
-    $("spinBtn").hidden = true;
   }
 
   async function doSpin(){
@@ -2141,8 +2159,9 @@ const ENGINE = (() => {
     } catch (e){
       err("playErr", S.online ? dbMessage(e) : (e.message || "That spin didn't take."));
     } finally {
+      // renderPlay() decides whether the lever is live again — it is not, if
+      // the spin took, and it is if the write failed and the turn is still open.
       S.spinning = false;
-      $("spinBtn").disabled = false;
       renderPlay();
       focusTurn();
     }
