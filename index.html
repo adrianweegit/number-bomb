@@ -906,6 +906,23 @@ const ENGINE = (() => {
     return { ok:true, value:g };
   }
 
+  /**
+   * The faces a reel should show, in order, ending on the one that was drawn.
+   * Presentation paces it; the ordering lives here because getting it wrong is
+   * invisible in the DOM. A fixed frame count over three faces stops on the
+   * same face every time — whatever was actually drawn — which both hides the
+   * real outcome for a beat and makes that one face look far more common than
+   * it is. The count is padded out to land on `outcome` instead.
+   */
+  function spinReel(outcome, turns = 3){
+    const at = SPINS.indexOf(outcome);
+    if (at < 0) throw new Error("That isn't a spin outcome.");
+    const frames = SPINS.length * Math.max(1, turns) + at + 1;
+    const faces = [];
+    for (let i = 0; i < frames; i++) faces.push(SPINS[i % SPINS.length]);
+    return faces;
+  }
+
   /** Weighted draw over SPIN_ODDS. Only the client that is up ever calls it. */
   function randomSpin(){
     let r = Math.floor(Math.random() * 100);
@@ -1098,7 +1115,7 @@ const ENGINE = (() => {
     VERSION, MAX_PLAYERS, MAX_MESSAGE, MODES, PENALTIES, CODE_ALPHABET,
     SPINS, SPIN_ODDS, SPIN_GUESSES,
     remaining, createGame, validateGuess, applyGuess, rematch, randomSecret,
-    randomSpin, applySpin, endSkip,
+    randomSpin, spinReel, applySpin, endSkip,
     newRoomCode, encodeState, decodeState, isValidState, toDoc, fromDoc,
     hideNumber, showNumber
   };
@@ -2024,19 +2041,33 @@ const ENGINE = (() => {
   // ---------- turns ---------------------------------------------------------
 
   /** The reel. Cosmetic only — the outcome is already decided before it runs. */
-  function reel(){
+  /** Cosmetic only — the outcome is drawn before this runs, and it ends on it. */
+  function reel(outcome){
     if (calm) return Promise.resolve();
-    const words = ENGINE.SPINS.map(k => SPIN_LABEL[k]);
+    const faces = ENGINE.spinReel(outcome);
     return new Promise(resolve => {
       const box = $("spinner"), word = $("spinWord");
       box.dataset.spin = "rolling";
       let i = 0, wait = 45;
       (function step(){
-        word.textContent = words[i % words.length];
+        word.textContent = SPIN_LABEL[faces[i]];
         i++;
-        if (i < 12){ wait += 9; setTimeout(step, wait); } else resolve();
+        if (i < faces.length){ wait += 9; setTimeout(step, wait); } else resolve();
       })();
     });
+  }
+
+  /**
+   * Show a drawn outcome on the wheel without waiting for the room to agree.
+   * Online, the write is a network round trip; leaving the reel up for it reads
+   * as the spin stalling. renderPlay() leaves this alone while S.spinning is
+   * set, and puts the wheel back to idle if the write then fails.
+   */
+  function landSpin(state){
+    $("spinner").dataset.spin = state.spin;
+    $("spinWord").textContent = SPIN_LABEL[state.spin];
+    $("spinNote").textContent = spinNote(state, true);
+    $("spinBtn").hidden = true;
   }
 
   async function doSpin(){
@@ -2050,8 +2081,9 @@ const ENGINE = (() => {
     S.spinning = true;
     $("spinBtn").disabled = true;
     try {
-      await reel();
+      await reel(outcome);
       const next = ENGINE.applySpin(st, outcome);
+      landSpin(next);
       if (S.online){
         await S.db.doc("rooms/" + S.code).update({
           spin: next.spin, left: next.left, updatedAt: Date.now()
