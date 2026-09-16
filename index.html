@@ -2200,9 +2200,13 @@ const ENGINE = (() => {
     show("Relay");
   }
 
-  /** `forced` is the last-number button: the same move, minus the typing. */
+  /**
+   * `forced` is the last-number button: the same move, minus the typing. It is
+   * only ever a number — anything else means this was wired to an event
+   * listener bare, and the box is what should be read.
+   */
   async function submitGuess(forced){
-    const typed = forced === undefined ? $("guess").value : forced;
+    const typed = typeof forced === "number" ? forced : $("guess").value;
     const check = ENGINE.validateGuess(S.state, typed);
     if (!check.ok){
       err("playErr", check.reason);
@@ -2451,7 +2455,9 @@ const ENGINE = (() => {
   // The last number is the bomb, so there is nothing to type — but the player
   // still has to be the one who does it.
   $("wireBtn").addEventListener("click", () => submitGuess(S.state.lo + 1));
-  $("guessBtn").addEventListener("click", submitGuess);
+  // Wrapped, not passed bare: a bare reference hands the click Event to
+  // submitGuess as its forced number.
+  $("guessBtn").addEventListener("click", () => submitGuess());
   $("guess").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
   $("sayIt").addEventListener("keydown", e => {
     if (e.key !== "Enter" || !S.state) return;
