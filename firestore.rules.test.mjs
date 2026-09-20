@@ -589,3 +589,13 @@ test("a whole game — spins, skips and doubles — is accepted move by move", a
     turn: again.turn, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: ++guard
   }));
 });
+
+// --- reading the room list --------------------------------------------------
+// tools/usage.mjs counts play by listing every room. That is a `list`, not a
+// `get`, and the two are separate operations even though one `read` rule covers
+// both — so it gets its own test rather than being assumed from the `get` above.
+test("a signed-in player may list the rooms; a signed-out one may not", async () => {
+  await seed(playing());
+  await assertSucceeds(db("dave").collection("rooms").get());
+  await assertFails(anon().collection("rooms").get());
+});
