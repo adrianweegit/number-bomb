@@ -171,7 +171,8 @@ SPINS  SPIN_ODDS  SPIN_GUESSES
 remaining()      createGame()   validateGuess()  applyGuess()  rematch()
 randomSecret()   newRoomCode()  encodeState()    decodeState() isValidState()
 toDoc()          fromDoc()      hideNumber()     showNumber()
-randomSpin()     spinReel()     applySpin()    endSkip()   turnControl()
+randomSpin()     spinReel()     applySpin()    endPass()   detonate()
+nextTurn()       turnControl()
 ```
 
 ### Playable state shape
@@ -186,7 +187,8 @@ randomSpin()     spinReel()     applySpin()    endSkip()   turnControl()
   penalty: "eats the last piece on the dish",
   mode: "pass" | "relay" | "online",
   turn: 0,                           // index into players
-  spin: "" | "normal" | "double" | "skip",  // this turn's wheel; "" = not spun
+  dir: 1 | -1,                       // which way round the table play is going
+  spin: "" | "normal" | "double" | "skip" | "reverse",   // "" = not spun
   left: 0,                           // guesses this turn still owes
   history: [ { p, g?, side, m? } ],  // append-only
   over: false,
@@ -195,8 +197,9 @@ randomSpin()     spinReel()     applySpin()    endSkip()   turnControl()
 ```
 
 A history entry: `p` player index, `g` the guess (absent on a skip), `side` one
-of `"low" | "high" | "boom" | "skip"`, `m` an optional message (≤ 80 chars,
-absent when empty).
+of `"low" | "high" | "boom" | "skip" | "reverse" | "dead"`, `m` an optional
+message (≤ 80 chars, absent when empty). Only `low`, `high` and `boom` carry a
+`g`; the other three are turns that produced no guess.
 
 `spin` and `left` must agree, and `isValidState()` enforces it: `""` and
 `"skip"` owe 0, `"normal"` owes 1, `"double"` owes 2 then 1. A finished game
@@ -247,7 +250,7 @@ times.
   penalty: "<≤120 chars>",
   players: ["Adrian", ...],  // frozen at start, parallel to seats
   seats: ["<uid>", ...],     // frozen at start; index = turn order
-  turn, spin, left, history, over, loser,
+  turn, dir, spin, left, history, over, loser,
   createdAt, updatedAt
 }
 ```
@@ -364,6 +367,29 @@ the database but not a determined player reading the page source.
 phone that is up and declared to the room; the rules check that the turn which
 follows is consistent with the declaration, never the draw itself. A modified
 client could spin Skip every turn.
+
+### 🔴 The expression budget is currently BREACHED
+
+**As of the Reverse / Immediate Death change, these rules exceed the cap on
+refused writes.** Around 75 denials per test run are denied for *exhaustion*
+rather than on merit. Accepted writes are unaffected — an accepted write
+short-circuits at its matching branch — and the 120-move test still proves an
+honest move evaluates at depth. But every `assertFails` in the suite is now
+weaker than it looks, and there is no headroom left for the next feature.
+
+Measured, not guessed: `main` before this change emitted **zero** warnings;
+adding *any* meaningful fourth branch to `isMove`'s OR produced ~77, whatever
+the branch contained — a two-expression dummy branch produced none. Twelve
+emulator runs tried and failed to claw it back: folding `isDeath` into
+`isMove`, splitting the no-guess turns into their own function, hoisting shared
+checks, `diff().affectedKeys().hasOnly()` on `isStart`/`isRematch`/`isMove`,
+removing a unary negation, binding `e` safely, and removing a modulo. None
+moved the count.
+
+The next person to touch this should assume the structure, not the wording, is
+the problem. Likely real fixes: drop a validation that is no longer earning its
+keep, or move adjudication into a Cloud Function (Blaze plan), which is what
+the section below says the rules fundamentally cannot do anyway.
 
 ### ⚠️ The expression budget — read before editing
 
