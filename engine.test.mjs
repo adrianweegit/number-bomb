@@ -369,7 +369,7 @@ test("Skip This Turn ends the turn and leaves the range alone", () => {
   const before = ENGINE.applySpin(game(), "skip");
   assert.deepEqual([before.spin, before.left], ["skip", 0]);
   assert.equal(ENGINE.validateGuess(before, 30).ok, false, "no guess is legal on a skip");
-  const s = ENGINE.endSkip(before);
+  const s = ENGINE.endPass(before);
   assert.deepEqual([s.lo, s.hi], [1, 100], "bounds untouched");
   assert.equal(s.turn, 1, "the next player is up");
   assert.deepEqual([s.spin, s.left], ["", 0], "and they spin for themselves");
@@ -377,24 +377,25 @@ test("Skip This Turn ends the turn and leaves the range alone", () => {
 });
 
 test("a skipped turn is logged, so the jump in turn order is explained", () => {
-  const s = ENGINE.endSkip(ENGINE.applySpin(game(), "skip"));
+  const s = ENGINE.endPass(ENGINE.applySpin(game(), "skip"));
   assert.deepEqual(s.history, [{ p: 0, side: "skip" }]);
   assert.equal(s.history[0].g, undefined, "a skip carries no number");
   assert.equal(ENGINE.isValidState(s), true);
 });
 
 test("a skip can carry trash talk, and a blank one leaves no field", () => {
-  const said = ENGINE.endSkip(ENGINE.applySpin(game(), "skip"), "  lucky escape  ");
+  const said = ENGINE.endPass(ENGINE.applySpin(game(), "skip"), "  lucky escape  ");
   assert.equal(said.history[0].m, "lucky escape");
   for (const blank of ["", "   ", undefined, null, 7]){
-    const quiet = ENGINE.endSkip(ENGINE.applySpin(game(), "skip"), blank);
+    const quiet = ENGINE.endPass(ENGINE.applySpin(game(), "skip"), blank);
     assert.equal("m" in quiet.history[0], false, `${JSON.stringify(blank)} should leave no field`);
   }
 });
 
-test("endSkip refuses to run on a turn that was not skipped", () => {
-  assert.throws(() => ENGINE.endSkip(game()), /spin first/i);
-  assert.throws(() => ENGINE.endSkip(ENGINE.applySpin(game(), "double")), /Nothing to skip/);
+test("endPass refuses to run on a turn that produced a guess", () => {
+  assert.throws(() => ENGINE.endPass(game()), /spin first/i);
+  assert.throws(() => ENGINE.endPass(ENGINE.applySpin(game(), "double")), /Nothing to pass on/);
+  assert.throws(() => ENGINE.endPass(ENGINE.applySpin(game(), "normal")), /Nothing to pass on/);
 });
 
 test("the wheel turns once per turn, and only on real outcomes", () => {
@@ -412,7 +413,8 @@ test("detonating on the first of two guesses ends it there", () => {
   assert.equal(s.loser, 0);
   assert.deepEqual([s.spin, s.left], ["", 0], "the second guess is written off");
   assert.throws(() => ENGINE.applySpin(s, "normal"), /already over/);
-  assert.throws(() => ENGINE.endSkip(s), /already over/);
+  assert.throws(() => ENGINE.endPass(s), /already over/);
+  assert.throws(() => ENGINE.detonate(s), /already over/);
 });
 
 test("the second guess of Double Trouble can be the fatal one", () => {
@@ -425,21 +427,33 @@ test("the second guess of Double Trouble can be the fatal one", () => {
 });
 
 test("the odds sum to 100 and every slice lands where it should", () => {
-  assert.deepEqual(ENGINE.SPINS, ["normal", "double", "skip"]);
-  assert.equal(ENGINE.SPINS.reduce((t, k) => t + ENGINE.SPIN_ODDS[k], 0), 100);
+  assert.deepEqual(ENGINE.SPINS, ["normal", "double", "skip", "reverse", "dead"]);
+  assert.equal(ENGINE.SPINS.reduce((t, k) => t + ENGINE.SPIN_ODDS[k], 0), 100,
+    "randomSpin draws out of 100, so the weights have to be exactly 100");
   const real = Math.random;
   try {
     const at = n => { Math.random = () => n / 100; return ENGINE.randomSpin(); };
-    for (const n of [0, 1, 49]) assert.equal(at(n), "normal", `${n} is a normal turn`);
-    for (const n of [50, 60, 74]) assert.equal(at(n), "double", `${n} is Double Trouble`);
-    for (const n of [75, 90, 99]) assert.equal(at(n), "skip", `${n} is a skip`);
+    for (const n of [0, 1, 49])   assert.equal(at(n), "normal",  `${n} is a normal turn`);
+    for (const n of [50, 60, 69]) assert.equal(at(n), "double",  `${n} is Double Trouble`);
+    for (const n of [70, 80, 84]) assert.equal(at(n), "skip",    `${n} is a skip`);
+    for (const n of [85, 90, 97]) assert.equal(at(n), "reverse", `${n} is a reverse`);
+    for (const n of [98, 99])     assert.equal(at(n), "dead",    `${n} is Immediate Death`);
   } finally { Math.random = real; }
 });
 
-test("a thousand spins stay inside the three outcomes", () => {
+test("Immediate Death stays rare enough that the bomb is still worth hunting", () => {
+  // It ends the game with no agency at all. At 2% a 15-turn game ends that way
+  // about a quarter of the time; much above that and the shrinking range — the
+  // actual game — stops deciding anything.
+  assert.ok(ENGINE.SPIN_ODDS.dead <= 3, `dead is ${ENGINE.SPIN_ODDS.dead}%, too common to be a shock`);
+  const overAGame = 1 - Math.pow(1 - ENGINE.SPIN_ODDS.dead / 100, 15);
+  assert.ok(overAGame < 0.35, `would end ${(overAGame * 100).toFixed(0)}% of games`);
+});
+
+test("a thousand spins stay inside the five outcomes", () => {
   const seen = new Set();
-  for (let i = 0; i < 1000; i++) seen.add(ENGINE.randomSpin());
-  assert.deepEqual([...seen].sort(), ["double", "normal", "skip"]);
+  for (let i = 0; i < 5000; i++) seen.add(ENGINE.randomSpin());
+  assert.deepEqual([...seen].sort(), ["dead", "double", "normal", "reverse", "skip"]);
 });
 
 test("a tampered state cannot mint itself extra guesses", () => {
@@ -482,13 +496,13 @@ test("a half-spun turn survives a turn code round trip", () => {
 });
 
 test("a skipped turn survives a room document round trip", () => {
-  const s = ENGINE.endSkip(ENGINE.applySpin(game(), "skip"), "not today");
+  const s = ENGINE.endPass(ENGINE.applySpin(game(), "skip"), "not today");
   const back = ENGINE.fromDoc(ENGINE.toDoc(s, { code: "AB12" }));
   assert.deepEqual(back.history, [{ p: 0, side: "skip", m: "not today" }]);
   assert.equal(back.turn, 1);
 });
 
-test("skips and doubles still drive the game to a forced detonation", () => {
+test("every wheel outcome still drives the game to an ending", () => {
   const real = Math.random;
   let seed = 7;
   try {
@@ -499,28 +513,40 @@ test("skips and doubles still drive the game to a forced detonation", () => {
       let turns = 0;
       while (!s.over){
         assert.ok(++turns < 1000, "a game that never ends");
-        s = ENGINE.applySpin(s, ENGINE.randomSpin());
-        if (s.spin === "skip"){ s = ENGINE.endSkip(s); continue; }
+        const outcome = ENGINE.randomSpin();
+        if (outcome === "dead"){ s = ENGINE.detonate(s); break; }
+        s = ENGINE.applySpin(s, outcome);
+        if (ENGINE.PASSES.includes(s.spin)){ s = ENGINE.endPass(s); continue; }
         while (!s.over && s.left > 0){
           assert.ok(ENGINE.remaining(s) >= 1, "a legal guess always exists");
           s = ENGINE.applyGuess(s, s.lo + 1);
         }
       }
-      assert.equal(s.history[s.history.length - 1].side, "boom");
+      const last = s.history[s.history.length - 1].side;
+      assert.ok(last === "boom" || last === "dead", `ended on "${last}"`);
       assert.ok(s.loser !== null);
     }
   } finally { Math.random = real; }
 });
 
-test("a room from before the spin is refused rather than half-loaded", () => {
-  assert.equal(ENGINE.VERSION, 3);
+test("a room from an older version is refused rather than half-loaded", () => {
+  assert.equal(ENGINE.VERSION, 4);
   const doc = ENGINE.toDoc(play(game(), 30), { code: "AB12" });
   assert.equal(ENGINE.fromDoc(doc) === null, false, "a current room still loads");
-  const stale = { ...doc, v: 2 };
-  delete stale.spin; delete stale.left;
-  assert.equal(ENGINE.fromDoc(stale), null, "a v2 room does not load");
-  assert.equal(ENGINE.decodeState(ENGINE.encodeState({ ...play(game(), 30), v: 2 })), null,
-    "and neither does a v2 turn code");
+
+  // v2 predates the wheel; v3 predates Reverse, so it has no direction and its
+  // turns cannot be advanced safely. Both are refused outright.
+  const v2 = { ...doc, v: 2 };
+  delete v2.spin; delete v2.left; delete v2.dir;
+  assert.equal(ENGINE.fromDoc(v2), null, "a v2 room does not load");
+  const v3 = { ...doc, v: 3 };
+  delete v3.dir;
+  assert.equal(ENGINE.fromDoc(v3), null, "a v3 room does not load either");
+
+  for (const v of [2, 3]){
+    assert.equal(ENGINE.decodeState(ENGINE.encodeState({ ...play(game(), 30), v })), null,
+      `and neither does a v${v} turn code`);
+  }
 });
 
 // --- the number the odds preview is built from ------------------------------
@@ -546,7 +572,7 @@ test("the reel stops on the outcome that was actually drawn", () => {
 
 test("the reel always opens on the same face, so it gives nothing away", () => {
   const firsts = ENGINE.SPINS.map(o => ENGINE.spinReel(o)[0]);
-  assert.deepEqual(firsts, [ENGINE.SPINS[0], ENGINE.SPINS[0], ENGINE.SPINS[0]],
+  assert.deepEqual(firsts, ENGINE.SPINS.map(() => ENGINE.SPINS[0]),
     "a reel that starts differently per outcome telegraphs the result");
 });
 
@@ -618,8 +644,8 @@ test("the wheel still comes first with one number left", () => {
 
 test("a skip with one number left is a reprieve, not a detonation", () => {
   const s = ENGINE.applySpin(oneLeft(), "skip");
-  assert.equal(ENGINE.turnControl(s), "skip");
-  const next = ENGINE.endSkip(s);
+  assert.equal(ENGINE.turnControl(s), "pass");
+  const next = ENGINE.endPass(s);
   assert.equal(next.over, false, "nobody blew up");
   assert.deepEqual([next.lo, next.hi], [40, 42], "the number is still out there");
   assert.equal(next.turn, (s.turn + 1) % s.players.length,
@@ -662,4 +688,154 @@ test("a finished game is waiting on nothing", () => {
   assert.equal(s.over, true);
   assert.equal(ENGINE.turnControl(s), "none");
   assert.equal(ENGINE.turnControl(null), "none");
+});
+
+// --- Reverse ----------------------------------------------------------------
+// The table turns round and the player who pulled it is passed over, so play
+// goes back the way it came. The risk is a stray "+1" surviving somewhere: a
+// single advance that ignores `dir` silently un-reverses the table.
+
+const four = () => ENGINE.createGame({
+  players: ["A", "B", "C", "D"], lo: 1, hi: 100, secret: 42, penalty: "p"
+});
+
+test("a new game runs forwards", () => {
+  const s = four();
+  assert.equal(s.dir, 1);
+  assert.equal(ENGINE.nextTurn(s), 1);
+});
+
+test("Reverse turns the table and passes over the player who pulled it", () => {
+  let s = ENGINE.applySpin(four(), "reverse");          // A is up
+  assert.equal(ENGINE.turnControl(s), "pass");
+  assert.equal(s.left, 0, "a reverse owes no guesses");
+  s = ENGINE.endPass(s);
+  assert.equal(s.dir, -1, "the table turned");
+  assert.equal(s.turn, 3, "A is passed over and play doubles back to D");
+  assert.deepEqual([s.lo, s.hi], [1, 100], "the range is untouched");
+  assert.equal(s.over, false);
+  assert.deepEqual(s.history, [{ p: 0, side: "reverse" }]);
+});
+
+test("play keeps going backwards afterwards, for guesses and skips alike", () => {
+  let s = ENGINE.endPass(ENGINE.applySpin(four(), "reverse"));   // dir -1, D up
+  s = ENGINE.applyGuess(ENGINE.applySpin(s, "normal"), 10);
+  assert.equal(s.turn, 2, "a guess moves backwards too, D -> C");
+  s = ENGINE.endPass(ENGINE.applySpin(s, "skip"));
+  assert.equal(s.turn, 1, "and so does a skip, C -> B");
+  assert.equal(s.dir, -1, "a skip does not turn the table back");
+});
+
+test("two Reverses put the table back the way it was", () => {
+  let s = ENGINE.endPass(ENGINE.applySpin(four(), "reverse"));   // dir -1, D up
+  s = ENGINE.endPass(ENGINE.applySpin(s, "reverse"));            // D reverses
+  assert.equal(s.dir, 1, "back to forwards");
+  assert.equal(s.turn, 0, "D is passed over, so it comes back round to A");
+});
+
+test("Double Trouble holds the turn through a reversal", () => {
+  let s = ENGINE.endPass(ENGINE.applySpin(four(), "reverse"));   // dir -1, D up
+  s = ENGINE.applySpin(s, "double");
+  s = ENGINE.applyGuess(s, 10);
+  assert.equal(s.turn, 3, "still D's turn, one guess owed");
+  s = ENGINE.applyGuess(s, 20);
+  assert.equal(s.turn, 2, "and then it goes backwards, D -> C");
+});
+
+test("with two players Reverse behaves exactly like Skip", () => {
+  // Not a bug: reversing a table of two hands on to the same person either way.
+  const pair = () => ENGINE.createGame({ players: ["A", "B"], lo: 1, hi: 100, secret: 42, penalty: "p" });
+  const rev = ENGINE.endPass(ENGINE.applySpin(pair(), "reverse"));
+  const skip = ENGINE.endPass(ENGINE.applySpin(pair(), "skip"));
+  assert.equal(rev.turn, skip.turn, "both hand over to the other player");
+  assert.equal(rev.turn, 1);
+  assert.equal(rev.dir, -1, "the direction still flips, it just cannot be seen");
+});
+
+test("a rematch always starts forwards again", () => {
+  let s = ENGINE.endPass(ENGINE.applySpin(four(), "reverse"));
+  s = ENGINE.applyGuess(ENGINE.applySpin(s, "normal"), 42);
+  assert.equal(s.over, true);
+  const again = ENGINE.rematch(s, 60);
+  assert.equal(again.dir, 1, "a fresh game is not still running backwards");
+});
+
+test("a direction that is not forwards or backwards is refused", () => {
+  const s = four();
+  for (const dir of [0, 2, -2, "1", 1.5, null, undefined]){
+    assert.equal(ENGINE.isValidState({ ...s, dir }), false, JSON.stringify(dir));
+  }
+  assert.equal(ENGINE.isValidState({ ...s, dir: -1 }), true);
+});
+
+test("a reversed game survives a turn code and a room document", () => {
+  const s = ENGINE.endPass(ENGINE.applySpin(four(), "reverse"), "take that");
+  const code = ENGINE.decodeState(ENGINE.encodeState(s));
+  assert.deepEqual([code.dir, code.turn], [-1, 3]);
+  const doc = ENGINE.fromDoc(ENGINE.toDoc(s, { code: "AB12" }));
+  assert.deepEqual([doc.dir, doc.turn], [-1, 3]);
+  assert.deepEqual(doc.history, [{ p: 0, side: "reverse", m: "take that" }]);
+});
+
+// --- Immediate Death --------------------------------------------------------
+
+test("Immediate Death ends the game where it stands", () => {
+  const before = four();
+  const s = ENGINE.detonate(before);
+  assert.equal(s.over, true);
+  assert.equal(s.loser, 0, "the player who pulled it wears it");
+  assert.deepEqual([s.lo, s.hi], [1, 100], "the bomb was never hunted");
+  assert.equal(s.turn, before.turn, "the turn does not move on");
+  assert.deepEqual([s.spin, s.left], ["", 0]);
+  assert.deepEqual(s.history, [{ p: 0, side: "dead" }]);
+  assert.equal(ENGINE.turnControl(s), "none");
+  assert.equal(ENGINE.isValidState(s), true);
+});
+
+test("Immediate Death can fire on the very first turn", () => {
+  const s = ENGINE.detonate(four());
+  assert.equal(s.history.length, 1, "no guess was ever made");
+  assert.equal(ENGINE.remaining(s), 98, "the range never moved");
+});
+
+test("Immediate Death is never a live spin", () => {
+  // It is terminal the instant it is drawn, so it must not be possible to
+  // leave it sitting on the wheel as a turn somebody still has to act on.
+  assert.throws(() => ENGINE.applySpin(four(), "dead"), /not a turn/);
+  assert.equal(ENGINE.isValidState({ ...four(), spin: "dead", left: 0 }), false);
+  assert.ok(ENGINE.SPINS.includes("dead"), "but the wheel can still draw it");
+  assert.equal(ENGINE.spinReel("dead").at(-1), "dead", "and the reel can land on it");
+});
+
+test("you cannot be vaporised after already spinning, or twice", () => {
+  assert.throws(() => ENGINE.detonate(ENGINE.applySpin(four(), "normal")), /already spun/);
+  assert.throws(() => ENGINE.detonate(ENGINE.applySpin(four(), "reverse")), /already spun/);
+  assert.throws(() => ENGINE.detonate(ENGINE.detonate(four())), /already over/);
+});
+
+test("a death can carry last words, and usually does not", () => {
+  assert.equal(ENGINE.detonate(four(), "  goodbye cruel world  ").history[0].m, "goodbye cruel world");
+  for (const blank of ["", "   ", undefined, null, 7]){
+    assert.equal("m" in ENGINE.detonate(four(), blank).history[0], false, JSON.stringify(blank));
+  }
+});
+
+test("a death survives a room document round trip", () => {
+  const s = ENGINE.detonate(four(), "rigged");
+  const back = ENGINE.fromDoc(ENGINE.toDoc(s, { code: "AB12" }));
+  assert.equal(back.over, true);
+  assert.equal(back.loser, 0);
+  assert.deepEqual(back.history, [{ p: 0, side: "dead", m: "rigged" }]);
+});
+
+test("a history entry that both guesses and does not is refused", () => {
+  const s = four();
+  for (const bad of [
+    { p: 0, g: 30, side: "reverse" },
+    { p: 0, g: 30, side: "dead" },
+    { p: 0, side: "low" },
+    { p: 0, side: "boom" }
+  ]){
+    assert.equal(ENGINE.isValidState({ ...s, history: [bad] }), false, JSON.stringify(bad));
+  }
 });

@@ -277,6 +277,13 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
   max-width:15ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 .order span.on{background:var(--ink);border-color:var(--ink);color:var(--ground)}
+/* Reverse is invisible unless the order row says which way play is going. */
+.order .dirmark{
+  border:0;background:none;padding:0 2px;
+  font:700 10px/1 "Space Mono",ui-monospace,monospace;
+  letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+}
+.order[data-dir="back"] .dirmark{color:var(--safe)}
 
 /* ---------- the stake ---------- */
 .stake{
@@ -321,10 +328,17 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .spinner[data-spin="double"] .spin-word{color:var(--on-grape)}
 .spinner[data-spin="skip"]{background:var(--accent-soft)}
 .spinner[data-spin="skip"] .spin-word{color:var(--accent)}
+.spinner[data-spin="reverse"]{background:var(--safe)}
+.spinner[data-spin="reverse"] .spin-word{color:#fff}
+/* The one outcome nobody recovers from, so it reads like the bomb itself. */
+.spinner[data-spin="dead"]{background:var(--ink);border-color:var(--accent)}
+.spinner[data-spin="dead"] .spin-word{color:var(--accent)}
 .spinner[data-spin="normal"] .spin-word,
 .spinner[data-spin="idle"] .spin-word{color:var(--ink)}
 @media (prefers-reduced-motion: no-preference){
-  .spinner[data-spin="double"],.spinner[data-spin="skip"]{animation:landed .35s ease}
+  .spinner[data-spin="double"],.spinner[data-spin="skip"],
+  .spinner[data-spin="reverse"]{animation:landed .35s ease}
+  .spinner[data-spin="dead"]{animation:landed .35s ease, doom 1.6s ease-in-out infinite .35s}
   @keyframes landed{from{transform:scale(.94) rotate(-1.5deg)}to{transform:none}}
 }
 
@@ -368,6 +382,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 .log .mv.dn{color:var(--grape)}
 .log .mv.bx{color:var(--accent)}
 .log .mv.sk{color:var(--grape);opacity:.85}
+.log .mv.rv{color:var(--safe)}
 .log .msg{
   grid-column:2 / -1;margin-top:4px;font-size:13.5px;font-style:italic;
   color:var(--muted);overflow-wrap:anywhere;
@@ -845,7 +860,7 @@ input:focus-visible,button:focus-visible,a:focus-visible,textarea:focus-visible{
 // Pure game rules + codecs. No DOM and no network in here — the test suite
 // loads this block directly.
 const ENGINE = (() => {
-  const VERSION = 3;
+  const VERSION = 4;
   const MAX_PLAYERS = 10;
   // A line of chat rides along with a move. Bounded because it lands in a
   // document everyone in the room can read, and Firestore caps a document
@@ -858,10 +873,16 @@ const ENGINE = (() => {
   // Every turn opens with a spin. Weighted, not thirds: most turns should still
   // play normally, so the wheel stays a jolt rather than the main event.
   // SPIN_ODDS are percentages and must sum to 100.
-  const SPINS = ["normal", "double", "skip"];
-  const SPIN_ODDS = { normal: 50, double: 25, skip: 25 };
-  // How many guesses each outcome owes. "skip" owes none and ends the turn.
-  const SPIN_GUESSES = { normal: 1, double: 2, skip: 0 };
+  const SPINS = ["normal", "double", "skip", "reverse", "dead"];
+  // Percentages, and they must sum to 100. "dead" is deliberately tiny: it ends
+  // the game with no agency at all, so at 2% it ends roughly one game in four
+  // over a typical length — rare enough that hunting the bomb stays the point.
+  const SPIN_ODDS = { normal: 50, double: 20, skip: 15, reverse: 13, dead: 2 };
+  // How many guesses each outcome owes. Only the first two owe any.
+  const SPIN_GUESSES = { normal: 1, double: 2, skip: 0, reverse: 0, dead: 0 };
+  // The outcomes that end a turn without a guess, and are committed by one
+  // button rather than the guess box.
+  const PASSES = ["skip", "reverse"];
 
   const PENALTIES = [
     "eats the last piece on the dish",
@@ -873,6 +894,17 @@ const ENGINE = (() => {
     "is on call for the next airport run",
     "sets their profile photo to a group selfie for a week"
   ];
+
+  /**
+   * Whose turn is next. Every advance goes through here, because Reverse means
+   * "next" is no longer "+1" and a stray increment left anywhere else would
+   * silently un-reverse the table.
+   */
+  function nextTurn(state, dir){
+    const n = state.players.length;
+    const step = dir === undefined ? state.dir : dir;
+    return (state.turn + step + n) % n;
+  }
 
   /** Numbers a player may still legally guess: strictly between the bounds. */
   function remaining(state){ return Math.max(0, state.hi - state.lo - 1); }
@@ -895,6 +927,8 @@ const ENGINE = (() => {
       penalty: String(penalty || PENALTIES[0]).trim() || PENALTIES[0],
       mode: MODES.includes(mode) ? mode : "pass",
       turn: 0,
+      // Which way round the table play is going. Reverse flips it.
+      dir: 1,
       // The turn's spin and the guesses it still owes. "" means nobody has
       // spun yet, so no guess is legal.
       spin: "",
@@ -933,7 +967,7 @@ const ENGINE = (() => {
    * real outcome for a beat and makes that one face look far more common than
    * it is. The count is padded out to land on `outcome` instead.
    */
-  function spinReel(outcome, turns = 3){
+  function spinReel(outcome, turns = 2){
     const at = SPINS.indexOf(outcome);
     if (at < 0) throw new Error("That isn't a spin outcome.");
     const frames = SPINS.length * Math.max(1, turns) + at + 1;
@@ -962,24 +996,55 @@ const ENGINE = (() => {
     if (state.over) throw new Error("This game is already over.");
     if (state.spin !== "") throw new Error("You have already spun this turn.");
     if (!SPINS.includes(outcome)) throw new Error("That isn't a spin outcome.");
+    // "dead" never becomes a live spin — it is terminal the moment it lands,
+    // so detonate() handles it and nothing is left on the wheel to act on.
+    if (outcome === "dead") throw new Error("Immediate Death is not a turn — use detonate().");
     return { ...state, spin: outcome, left: SPIN_GUESSES[outcome] };
   }
 
   /**
-   * Ends a skipped turn. It still lands in the log — a turn that produced no
-   * guess would otherwise look, on everyone else's phone, like the turn order
-   * jumping for no reason.
+   * Immediate Death. The wheel kills the player who pulled it, there and then:
+   * no guess, no last word, the bomb is never found. One step rather than two,
+   * because anything else would not be immediate.
    */
-  function endSkip(state, message){
+  function detonate(state, message){
     if (state.over) throw new Error("This game is already over.");
-    if (state.spin !== "skip") throw new Error("Nothing to skip — spin first.");
+    if (state.spin !== "") throw new Error("You have already spun this turn.");
     const said = typeof message === "string" ? message.trim().slice(0, MAX_MESSAGE) : "";
-    const move = { p: state.turn, side: "skip" };
+    const move = { p: state.turn, side: "dead" };
     if (said) move.m = said;
     return {
       ...state,
       history: state.history.concat([move]),
-      turn: (state.turn + 1) % state.players.length,
+      over: true,
+      loser: state.turn,
+      spin: "",
+      left: 0
+    };
+  }
+
+  /**
+   * Ends a turn that produced no guess — a Skip, or a Reverse. Both land in the
+   * log, because a turn that produced nothing would otherwise look, on everyone
+   * else's phone, like the turn order jumping for no reason.
+   *
+   * Reverse flips the direction of play and then hands on under the NEW
+   * direction, so the player who just went is skipped and the table doubles
+   * back. With two players that is indistinguishable from a Skip, which is
+   * expected rather than a bug.
+   */
+  function endPass(state, message){
+    if (state.over) throw new Error("This game is already over.");
+    if (!PASSES.includes(state.spin)) throw new Error("Nothing to pass on — spin first.");
+    const said = typeof message === "string" ? message.trim().slice(0, MAX_MESSAGE) : "";
+    const move = { p: state.turn, side: state.spin };
+    if (said) move.m = said;
+    const dir = state.spin === "reverse" ? -state.dir : state.dir;
+    return {
+      ...state,
+      history: state.history.concat([move]),
+      dir,
+      turn: nextTurn(state, dir),
       spin: "",
       left: 0
     };
@@ -1012,7 +1077,7 @@ const ENGINE = (() => {
     if (next.left <= 0){
       next.left = 0;
       next.spin = "";
-      next.turn = (state.turn + 1) % state.players.length;
+      next.turn = nextTurn(state);
     }
     return next;
   }
@@ -1033,7 +1098,7 @@ const ENGINE = (() => {
   function turnControl(state){
     if (!state || state.over) return "none";
     if (state.spin === "") return "spin";
-    if (state.spin === "skip") return "skip";
+    if (PASSES.includes(state.spin)) return "pass";
     return remaining(state) === 1 ? "wire" : "guess";
   }
 
@@ -1044,6 +1109,8 @@ const ENGINE = (() => {
       lo: state.lo0, hi: state.hi0,
       secret, penalty: state.penalty, mode: state.mode
     });
+    // A fresh game always runs forwards again, whatever the last one ended on.
+    base.dir = 1;
     base.turn = state.loser === null ? 0 : (state.loser + 1) % state.players.length;
     return base;
   }
@@ -1109,8 +1176,10 @@ const ENGINE = (() => {
     if (s.lo < s.lo0 || s.hi > s.hi0 || s.lo >= s.hi) return false;
     if (s.secret <= s.lo || s.secret >= s.hi) return false;
     if (s.turn < 0 || s.turn >= s.players.length) return false;
-    // spin and left have to agree, or a tampered state could mint extra guesses
-    if (!["", "skip", "normal", "double"].includes(s.spin)) return false;
+    if (s.dir !== 1 && s.dir !== -1) return false;
+    // spin and left have to agree, or a tampered state could mint extra guesses.
+    // "dead" is never a live spin — it is terminal the instant it is drawn.
+    if (!["", "skip", "reverse", "normal", "double"].includes(s.spin)) return false;
     if (s.spin === "double" ? (s.left !== 1 && s.left !== 2)
                             : s.left !== (SPIN_GUESSES[s.spin] || 0)) return false;
     if (typeof s.over !== "boolean") return false;
@@ -1121,7 +1190,7 @@ const ENGINE = (() => {
     if (!Array.isArray(s.history)) return false;
     return s.history.every(e =>
       e && typeof e === "object" && int(e.p) && e.p >= 0 && e.p < s.players.length &&
-      (e.side === "skip"
+      (["skip", "reverse", "dead"].includes(e.side)
         ? e.g === undefined
         : (int(e.g) && ["low", "high", "boom"].includes(e.side))) &&
       (e.m === undefined ||
@@ -1152,9 +1221,9 @@ const ENGINE = (() => {
 
   return {
     VERSION, MAX_PLAYERS, MAX_MESSAGE, MODES, PENALTIES, CODE_ALPHABET,
-    SPINS, SPIN_ODDS, SPIN_GUESSES,
+    SPINS, SPIN_ODDS, SPIN_GUESSES, PASSES,
     remaining, createGame, validateGuess, applyGuess, rematch, randomSecret,
-    randomSpin, spinReel, applySpin, endSkip, turnControl,
+    randomSpin, spinReel, applySpin, endPass, detonate, nextTurn, turnControl,
     newRoomCode, encodeState, decodeState, isValidState, toDoc, fromDoc,
     hideNumber, showNumber
   };
@@ -1528,7 +1597,10 @@ const ENGINE = (() => {
   // ---------- rendering the board ------------------------------------------
   const pct = n => { const span = S.state.hi0 - S.state.lo0; return span <= 0 ? 0 : ((n - S.state.lo0) / span) * 100; };
 
-  const SPIN_LABEL = { normal: "BUSINESS AS USUAL", double: "DOUBLE TROUBLE", skip: "SKIP THIS TURN" };
+  const SPIN_LABEL = {
+    normal: "BUSINESS AS USUAL", double: "DOUBLE TROUBLE", skip: "SKIP THIS TURN",
+    reverse: "REVERSE", dead: "IMMEDIATE DEATH"
+  };
 
   /** One line of plain English for the wheel, written for whoever is reading it. */
   function spinNote(st, yours){
@@ -1536,6 +1608,15 @@ const ENGINE = (() => {
     if (st.spin === "") return yours
       ? "It decides what kind of turn you get."
       : `${who} has to pull the lever before they can guess.`;
+    if (st.spin === "reverse"){
+      const to = st.players[ENGINE.nextTurn(st, -st.dir)];
+      if (ENGINE.remaining(st) === 1) return yours
+        ? `Saved, and the table turns. ${to} inherits ${st.lo + 1}.`
+        : `${who} turned the table. ${to} inherits ${st.lo + 1}.`;
+      return yours
+        ? `The table turns round. It goes back to ${to}, and you are off the hook.`
+        : `${who} turned the table. Play doubles back to ${to}.`;
+    }
     if (st.spin === "skip"){
       if (ENGINE.remaining(st) === 1) return yours
         ? `The wheel just saved your life. ${st.lo + 1} is still out there.`
@@ -1560,7 +1641,7 @@ const ENGINE = (() => {
     if (S.online && !isMyTurn()) return;
     const control = ENGINE.turnControl(st);
     if (control === "spin") $("spinBtn").focus();
-    else if (control === "skip") $("skipBtn").focus();
+    else if (control === "pass") $("skipBtn").focus();
     else if (control === "wire") $("wireBtn").focus();
     else if (control === "guess") $("guess").focus();
   }
@@ -1574,10 +1655,12 @@ const ENGINE = (() => {
       no.className = "n"; no.textContent = String(st.history.length - idx).padStart(2, "0");
       const nm = document.createElement("span");
       nm.className = "nm";
-      nm.textContent = h.side === "skip" ? st.players[h.p] : `${st.players[h.p]} · ${h.g}`;
+      nm.textContent = h.g === undefined ? st.players[h.p] : `${st.players[h.p]} · ${h.g}`;
       const mv = document.createElement("span");
       if (h.side === "boom"){ mv.className = "mv bx"; mv.textContent = "BOOM"; }
       else if (h.side === "skip"){ mv.className = "mv sk"; mv.textContent = "spun SKIP"; }
+      else if (h.side === "reverse"){ mv.className = "mv rv"; mv.textContent = "turned the table"; }
+      else if (h.side === "dead"){ mv.className = "mv bx"; mv.textContent = "VAPORISED"; }
       else if (h.side === "low"){ mv.className = "mv up"; mv.textContent = `floor → ${h.g}`; }
       else { mv.className = "mv dn"; mv.textContent = `ceiling → ${h.g}`; }
       li.append(no, nm, mv);
@@ -1613,6 +1696,7 @@ const ENGINE = (() => {
     const turnLine = !spun ? "Pull the lever before you guess."
       : st.spin === "skip" ? (left === 1 ? "Saved. That was the last number."
                                           : "The wheel says sit this one out.")
+      : st.spin === "reverse" ? "The table turns. You are passed over."
       : left === 1 ? rangeLine
       : st.spin === "double" && st.left === 2 ? `Two guesses this turn. ${rangeLine}`
       : rangeLine;
@@ -1651,6 +1735,12 @@ const ENGINE = (() => {
 
     const pips = $("orderPips");
     pips.textContent = "";
+    // Reverse is invisible unless the order row says so.
+    pips.dataset.dir = st.dir === -1 ? "back" : "forward";
+    const arrow = document.createElement("span");
+    arrow.className = "dirmark";
+    arrow.textContent = st.dir === -1 ? "\u25C0 reversed" : "\u25B6";
+    pips.append(arrow);
     st.players.forEach((name, i) => {
       const s = document.createElement("span");
       s.textContent = S.online && (st.seats || [])[i] === seatId ? name + " (you)" : name;
@@ -1674,7 +1764,12 @@ const ENGINE = (() => {
     const control = yours ? ENGINE.turnControl(st) : "none";
     $("guessBlock").hidden = control !== "guess";
     $("wireBtn").hidden = control !== "wire";
-    $("skipBtn").hidden = control !== "skip";
+    $("skipBtn").hidden = control !== "pass";
+    if (control === "pass"){
+      $("skipBtn").textContent = st.spin === "reverse"
+        ? "Turn the table & pass it on"
+        : "Sit it out & pass it on";
+    }
     $("sayBlock").hidden = !yours || !spun;
     if (control === "wire") $("wireBtn").textContent = `Cut the wire — ${st.lo + 1}`;
     $("nudgeBtn").hidden = !(S.online && !mine);
@@ -1721,13 +1816,24 @@ const ENGINE = (() => {
   function endGame(){
     const st = S.state, loser = st.players[st.loser];
     const mine = S.online && (st.seats || [])[st.loser] === seatId;
+    const last = st.history[st.history.length - 1] || {};
+    const vaporised = last.side === "dead";
     $("loserName").textContent = mine ? "You" : loser;
-    $("loserVerb").textContent = "popped it. Everyone saw.";
+    // A guessed bomb and a bomb the wheel set off are not the same story, and
+    // the log would contradict a screen that claimed they were.
+    $("loserVerb").textContent = vaporised
+      ? "never stood a chance. The wheel did it."
+      : "popped it. Everyone saw.";
     $("secretReveal").textContent = st.secret;
-    $("turnsSurvived").textContent = st.history.length - 1;
+    // Only actual guesses count, and not the fatal one. Skips, reverses and
+    // a death are turns, not guesses, and the label says guesses.
+    $("turnsSurvived").textContent =
+      st.history.filter(h => h.g !== undefined && h.side !== "boom").length;
     $("overPenalty").textContent = loser;
     $("overPenaltyText").textContent = st.penalty;
-    $("mastTag").innerHTML = `Detonated &middot; ${st.secret}`;
+    $("mastTag").innerHTML = vaporised
+      ? `Vaporised &middot; ${st.secret}`
+      : `Detonated &middot; ${st.secret}`;
     $("rematch").hidden = S.online && !S.isHost;
     $("rematchWait").hidden = !(S.online && !S.isHost);
     $("newGame").textContent = S.online ? "Leave the room" : "Back to the start";
@@ -2127,12 +2233,13 @@ const ENGINE = (() => {
    * as the spin stalling. renderPlay() leaves this alone while S.spinning is
    * set, and puts the wheel back to idle if the write then fails.
    */
-  function landSpin(state){
-    $("spinBtn").dataset.spin = state.spin;
+  function landSpin(state, outcome){
+    const face = outcome || state.spin;
+    $("spinBtn").dataset.spin = face;
     $("spinBtn").disabled = true;
-    $("spinBtn").setAttribute("aria-label", SPIN_LABEL[state.spin]);
-    $("spinWord").textContent = SPIN_LABEL[state.spin];
-    $("spinNote").textContent = spinNote(state, true);
+    $("spinBtn").setAttribute("aria-label", SPIN_LABEL[face]);
+    $("spinWord").textContent = SPIN_LABEL[face];
+    if (!state.over) $("spinNote").textContent = spinNote(state, true);
   }
 
   async function doSpin(){
@@ -2147,14 +2254,16 @@ const ENGINE = (() => {
     $("spinBtn").disabled = true;
     try {
       await reel(outcome);
-      const next = ENGINE.applySpin(st, outcome);
-      landSpin(next);
+      // Immediate Death never becomes a live spin — it ends the game here.
+      const next = outcome === "dead" ? ENGINE.detonate(st) : ENGINE.applySpin(st, outcome);
+      landSpin(next, outcome);
       if (S.online){
-        await S.db.doc("rooms/" + S.code).update({
-          spin: next.spin, left: next.left, updatedAt: Date.now()
-        });
+        await S.db.doc("rooms/" + S.code).update(outcome === "dead"
+          ? { history: next.history, over: true, loser: next.loser, updatedAt: Date.now() }
+          : { spin: next.spin, left: next.left, updatedAt: Date.now() });
       } else {
         S.state = next;
+        if (next.over){ endGame(); return; }
       }
     } catch (e){
       err("playErr", S.online ? dbMessage(e) : (e.message || "That spin didn't take."));
@@ -2162,26 +2271,29 @@ const ENGINE = (() => {
       // renderPlay() decides whether the lever is live again — it is not, if
       // the spin took, and it is if the write failed and the turn is still open.
       S.spinning = false;
-      renderPlay();
-      focusTurn();
+      // A death ends the game inside the try; re-rendering the board behind the
+      // Over screen would fight it.
+      if (!(S.state && S.state.over)){ renderPlay(); focusTurn(); }
     }
   }
 
-  /** A skipped turn still writes a line to the log, so the room can see why. */
-  async function passSkip(){
+  /** A turn that produced no guess still writes a line, so the room can see why. */
+  async function passTurn(){
     const st = S.state;
-    if (!st || st.over || st.spin !== "skip") return;
+    if (!st || st.over || !ENGINE.PASSES.includes(st.spin)) return;
     if (S.online && !isMyTurn()) return err("playErr", "It's not your turn yet.");
     err("playErr", "");
     const who = st.players[st.turn];
-    const next = ENGINE.endSkip(st, $("sayIt").value);
+    const was = st.spin;
+    const next = ENGINE.endPass(st, $("sayIt").value);
     $("sayIt").value = "";
 
     if (S.online){
       $("skipBtn").disabled = true;
       try {
         await S.db.doc("rooms/" + S.code).update({
-          turn: next.turn, history: next.history, spin: "", left: 0, updatedAt: Date.now()
+          turn: next.turn, dir: next.dir, history: next.history,
+          spin: "", left: 0, updatedAt: Date.now()
         });
       } catch (e){
         err("playErr", dbMessage(e));
@@ -2192,7 +2304,10 @@ const ENGINE = (() => {
     S.state = next;
     renderPlay();
     if (S.localMode === "relay"){
-      relayHandoff(next, `${who} spun SKIP THIS TURN`, "sk", "No guess — the range is untouched");
+      relayHandoff(next,
+        was === "reverse" ? `${who} spun REVERSE` : `${who} spun SKIP THIS TURN`,
+        "sk",
+        was === "reverse" ? "The table turns — play doubles back" : "No guess — the range is untouched");
     } else {
       const deck = $("screenPlay");
       if (!calm){ deck.classList.remove("pop"); void deck.offsetWidth; deck.classList.add("pop"); }
@@ -2248,7 +2363,7 @@ const ENGINE = (() => {
       $("wireBtn").disabled = true;
       try {
         await S.db.doc("rooms/" + S.code).update({
-          lo: next.lo, hi: next.hi, turn: next.turn, history: next.history,
+          lo: next.lo, hi: next.hi, turn: next.turn, dir: next.dir, history: next.history,
           spin: next.spin, left: next.left,
           over: next.over, loser: next.loser, updatedAt: Date.now()
         });
@@ -2283,7 +2398,7 @@ const ENGINE = (() => {
       try {
         await S.db.doc("rooms/" + S.code).update({
           lo: next.lo, hi: next.hi, bomb: ENGINE.hideNumber(secret),
-          turn: next.turn, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: Date.now()
+          turn: next.turn, dir: 1, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: Date.now()
         });
         S.showingOver = false;
       } catch (e){ err("playErr", dbMessage(e)); }
@@ -2376,7 +2491,7 @@ const ENGINE = (() => {
         v: ENGINE.VERSION, code, phase: "lobby", hostId: seatId, mode: "online",
         lo0: cfg.lo, hi0: cfg.hi, lo: cfg.lo, hi: cfg.hi,
         bomb: ENGINE.hideNumber(cfg.secret), penalty: cfg.penalty,
-        players: [], seats: [], turn: 0, spin: "", left: 0, history: [], over: false, loser: null,
+        players: [], seats: [], turn: 0, dir: 1, spin: "", left: 0, history: [], over: false, loser: null,
         createdAt: Date.now(), updatedAt: Date.now()
       });
       // Whoever typed the number knows where the bomb is, so they referee
@@ -2433,7 +2548,7 @@ const ENGINE = (() => {
         phase: "playing",
         seats: S.seats.map(s => s.id),
         players: S.seats.map(s => s.name),
-        turn: 0, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: Date.now()
+        turn: 0, dir: 1, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: Date.now()
       });
       err("lobbyErr", "");
     } catch (e){ err("lobbyErr", dbMessage(e)); $("startBtn").disabled = false; }
@@ -2470,7 +2585,7 @@ const ENGINE = (() => {
   $("resumeCode").addEventListener("input", () => err("resumeErr", ""));
 
   $("spinBtn").addEventListener("click", doSpin);
-  $("skipBtn").addEventListener("click", passSkip);
+  $("skipBtn").addEventListener("click", passTurn);
   // The last number is the bomb, so there is nothing to type — but the player
   // still has to be the one who does it.
   $("wireBtn").addEventListener("click", () => submitGuess(S.state.lo + 1));
@@ -2481,7 +2596,7 @@ const ENGINE = (() => {
   $("sayIt").addEventListener("keydown", e => {
     if (e.key !== "Enter" || !S.state) return;
     const control = ENGINE.turnControl(S.state);
-    if (control === "skip") passSkip();
+    if (control === "pass") passTurn();
     else if (control === "wire") submitGuess(S.state.lo + 1);
     else submitGuess();
   });

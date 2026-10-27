@@ -48,7 +48,7 @@ service cloud.firestore {
 
       function newRoom(id) {
         let n = request.resource.data;
-        return n.v == 3
+        return n.v == 4
           && n.code == id
           && n.hostId == request.auth.uid
           && n.mode == 'online'
@@ -59,7 +59,7 @@ service cloud.firestore {
           && n.bomb is string && n.bomb.size() > 0 && n.bomb.size() <= 256
           && n.penalty is string && n.penalty.size() > 0 && n.penalty.size() <= 120
           && n.players.size() == 0 && n.seats.size() == 0
-          && n.turn == 0 && n.spin == '' && n.left == 0
+          && n.turn == 0 && n.dir == 1 && n.spin == '' && n.left == 0
           && n.history.size() == 0
           && n.over == false && n.loser == null;
       }
@@ -68,7 +68,7 @@ service cloud.firestore {
       function isStart() {
         let p = resource.data;
         let n = request.resource.data;
-        return p.v == 3
+        return p.v == 4
           && p.phase == 'lobby'
           && p.hostId == request.auth.uid
           && n.phase == 'playing'
@@ -78,7 +78,7 @@ service cloud.firestore {
           && n.seats.size() >= 2 && n.seats.size() <= 10
           && n.players.size() == n.seats.size()
           && n.lo == p.lo0 && n.hi == p.hi0
-          && n.turn == 0 && n.spin == '' && n.left == 0
+          && n.turn == 0 && n.dir == 1 && n.spin == '' && n.left == 0
           && n.history.size() == 0
           && n.over == false && n.loser == null;
       }
@@ -93,7 +93,7 @@ service cloud.firestore {
       function isSpin() {
         let p = resource.data;
         let n = request.resource.data;
-        return p.v == 3
+        return p.v == 4
           && p.phase == 'playing'
           && p.over == false
           && p.seats.size() > 1
@@ -116,11 +116,16 @@ service cloud.firestore {
         let p = resource.data;
         let n = request.resource.data;
         let i = p.history.size();
-        let e = n.history[i];
-        let up = (p.turn + 1) % p.seats.size();
+        // Bound safely. On any write that does not append (a start, a
+        // rematch, a spin) this index is past the end, and an errored binding
+        // makes every branch below cost far more to reject than it should —
+        // enough to breach the 1000-expression cap noted at the top.
+        let e = i < n.history.size() ? n.history[i] : {};
+        let up = (p.turn + p.dir + p.seats.size()) % p.seats.size();
+        let back = (p.turn - p.dir + p.seats.size()) % p.seats.size();
         // Double Trouble owes two guesses; only the last one moves the turn on.
         let last = p.left <= 1;
-        return p.v == 3
+        return p.v == 4
           && p.phase == 'playing'
           && p.over == false
           && p.seats.size() > 1
@@ -138,36 +143,54 @@ service cloud.firestore {
           // lands in a document the whole room reads
           && (!('m' in e) || (e.m is string && e.m.size() > 0 && e.m.size() <= 80))
           && (
-               // a skipped turn: the wheel said skip, so no number is guessed
-               // and the range is left exactly where it was
-               (e.side == 'skip' && p.spin == 'skip' && !('g' in e)
-                 && n.lo == p.lo && n.hi == p.hi
-                 && n.over == false && n.loser == null
-                 && n.turn == up && n.spin == '' && n.left == 0)
+               // Turns that produce no guess at all. They share everything
+               // except where the turn goes next, so the common checks are
+               // hoisted: naming them three times over costs enough evaluations
+               // to breach the 1000-expression cap noted at the top.
+               (!('g' in e) && n.lo == p.lo && n.hi == p.hi
+                 && n.spin == '' && n.left == 0
+                 && (
+                      // the wheel said skip: pass on, table unchanged
+                      (e.side == 'skip' && p.spin == 'skip'
+                        && n.over == false && n.loser == null
+                        && n.dir == p.dir && n.turn == up)
+                      ||
+                      // the wheel said reverse: the table turns round and the
+                      // player who pulled it is passed over
+                      (e.side == 'reverse' && p.spin == 'reverse'
+                        && n.over == false && n.loser == null
+                        && n.dir != p.dir && n.turn == back)
+                      ||
+                      // Immediate Death, on a turn where nothing else was spun
+                      (e.side == 'dead' && p.spin == '' && p.left == 0
+                        && n.over == true && n.loser == p.turn
+                        && n.dir == p.dir && n.turn == p.turn)
+                    ))
                ||
                (e.g is int
                  // bounds are exclusive, which is what makes the range shrink
                  && e.g > p.lo && e.g < p.hi
                  // you cannot guess until the wheel has given you a guess to spend
                  && p.left > 0 && (p.spin == 'normal' || p.spin == 'double')
+                 && n.dir == p.dir
                  && (
-                      // too low: the floor rises to the guess
-                      (e.side == 'low' && n.lo == e.g && n.hi == p.hi
-                        && n.over == false && n.loser == null
-                        && ((last && n.turn == up && n.spin == '' && n.left == 0)
-                            || (!last && n.turn == p.turn && n.spin == p.spin && n.left == p.left - 1)))
-                      ||
-                      // too high: the ceiling drops to the guess
-                      (e.side == 'high' && n.hi == e.g && n.lo == p.lo
-                        && n.over == false && n.loser == null
-                        && ((last && n.turn == up && n.spin == '' && n.left == 0)
-                            || (!last && n.turn == p.turn && n.spin == p.spin && n.left == p.left - 1)))
-                      ||
-                      // detonation: bounds freeze, the guesser is pinned as loser,
-                      // and a second guess owed by Double Trouble is written off
+                      // detonation: everything freezes and the guesser is pinned
+                      // as loser; a second guess owed by Double Trouble is
+                      // written off with it
                       (e.side == 'boom' && n.over == true && n.loser == p.turn
                         && n.lo == p.lo && n.hi == p.hi && n.turn == p.turn
                         && n.spin == '' && n.left == 0)
+                      ||
+                      // a survivable guess: exactly one bound moves to it, and
+                      // the turn only passes on once the spin's guesses are
+                      // spent. Stated once for both bounds rather than twice —
+                      // the duplicate cost enough evaluations to breach the cap.
+                      (n.over == false && n.loser == null
+                        && ((e.side == 'low' && n.lo == e.g && n.hi == p.hi)
+                            || (e.side == 'high' && n.hi == e.g && n.lo == p.lo))
+                        && ((last && n.turn == up && n.spin == '' && n.left == 0)
+                            || (!last && n.turn == p.turn && n.spin == p.spin
+                                && n.left == p.left - 1)))
                     ))
              );
       }
@@ -176,7 +199,7 @@ service cloud.firestore {
       function isRematch() {
         let p = resource.data;
         let n = request.resource.data;
-        return p.v == 3
+        return p.v == 4
           && p.phase == 'playing'
           && p.over == true
           && p.hostId == request.auth.uid
@@ -187,7 +210,7 @@ service cloud.firestore {
           && n.phase == 'playing'
           && n.lo == p.lo0 && n.hi == p.hi0
           && n.history.size() == 0
-          && n.spin == '' && n.left == 0
+          && n.dir == 1 && n.spin == '' && n.left == 0
           && n.over == false && n.loser == null
           && n.turn is int && n.turn >= 0 && n.turn < p.seats.size()
           && n.bomb is string && n.bomb.size() > 0 && n.bomb.size() <= 256;

@@ -39,10 +39,10 @@ const anon = () => env.unauthenticatedContext().firestore();
 
 const ROOM = "AB12";
 const lobby = (over = {}) => ({
-  v: 3, code: ROOM, hostId: "alice", mode: "online", phase: "lobby",
+  v: 4, code: ROOM, hostId: "alice", mode: "online", phase: "lobby",
   lo0: 1, hi0: 100, lo: 1, hi: 100,
   bomb: "scrambled-bomb-token", penalty: "eats the last piece",
-  players: [], seats: [], turn: 0, spin: "", left: 0,
+  players: [], seats: [], turn: 0, dir: 1, spin: "", left: 0,
   history: [], over: false, loser: null, ...over
 });
 // A room mid-game. The player who is up has already spun an ordinary turn,
@@ -124,7 +124,7 @@ test("you can give up your own seat", async () => {
 
 // --- starting ---------------------------------------------------------------
 const START = { phase: "playing", seats: ["alice", "bob", "cara"], players: ["Alice", "Bob", "Cara"],
-                turn: 0, spin: "", left: 0, history: [], over: false, loser: null, lo: 1, hi: 100 };
+                turn: 0, dir: 1, spin: "", left: 0, history: [], over: false, loser: null, lo: 1, hi: 100 };
 
 test("only the host starts the game", async () => {
   await seed(lobby(), { alice: "Alice", bob: "Bob", cara: "Cara" });
@@ -259,10 +259,10 @@ test("a long game still evaluates — the rules stay inside the expression budge
     lo = g; turn = (turn + 1) % 2;
   }
   await seed({
-    v: 3, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
+    v: 4, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
     lo0: 0, hi0: 400, lo, hi, bomb: "scrambled-bomb-token",
     penalty: "eats the last piece", players, seats,
-    turn, spin: "normal", left: 1, history, over: false, loser: null
+    turn, dir: 1, spin: "normal", left: 1, history, over: false, loser: null
   });
 
   const mover = seats[turn];
@@ -278,10 +278,10 @@ test("a long game still evaluates — the rules stay inside the expression budge
   // not merely because evaluation ran out of room.
   await env.clearFirestore();
   await seed({
-    v: 3, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
+    v: 4, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
     lo0: 0, hi0: 400, lo, hi, bomb: "scrambled-bomb-token",
     penalty: "eats the last piece", players, seats,
-    turn, spin: "normal", left: 1, history, over: false, loser: null
+    turn, dir: 1, spin: "normal", left: 1, history, over: false, loser: null
   });
   await assertFails(db(seats[(turn + 1) % 2]).doc(`rooms/${ROOM}`).update(good), "out of turn, at depth");
 
@@ -289,10 +289,10 @@ test("a long game still evaluates — the rules stay inside the expression budge
   // budget check rather than riding on the move above.
   await env.clearFirestore();
   await seed({
-    v: 3, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
+    v: 4, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
     lo0: 0, hi0: 400, lo, hi, bomb: "scrambled-bomb-token",
     penalty: "eats the last piece", players, seats,
-    turn, spin: "", left: 0, history, over: false, loser: null
+    turn, dir: 1, spin: "", left: 0, history, over: false, loser: null
   });
   await assertSucceeds(db(mover).doc(`rooms/${ROOM}`).update({ spin: "double", left: 2 }));
   await assertFails(db(seats[(turn + 1) % 2]).doc(`rooms/${ROOM}`).update({ spin: "skip", left: 0 }),
@@ -503,16 +503,17 @@ test("a room opens and starts with the wheel at rest", async () => {
 // --- the version bump -------------------------------------------------------
 // The spin changed the shape of a room, so a v2 game left running across the
 // republish must stop dead rather than run on half-understood.
-test("a room from before the spin is frozen, not half-played", async () => {
-  const old = { ...playing(), v: 2 };
-  delete old.spin; delete old.left;
+test("a room from an older version is frozen, not half-played", async () => {
+  const old = { ...playing(), v: 3 };
+  delete old.dir;
   await seed(old);
   await assertFails(db("alice").doc(`rooms/${ROOM}`).update({
     ...done, lo: 30, hi: 100, turn: 1, history: [{ p: 0, g: 30, side: "low" }]
-  }), "a v2 move");
-  await assertFails(db("alice").doc(`rooms/${ROOM}`).update({ spin: "normal", left: 1 }), "a v2 spin");
+  }), "a v3 move");
+  await assertFails(db("alice").doc(`rooms/${ROOM}`).update({ spin: "normal", left: 1 }), "a v3 spin");
   await env.clearFirestore();
   await assertFails(db("alice").doc(`rooms/${ROOM}`).set(lobby({ v: 2 })), "a v2 room");
+  await assertFails(db("alice").doc(`rooms/${ROOM}`).set(lobby({ v: 3 })), "a v3 room");
 });
 
 // --- engine and rules, played end to end ------------------------------------
@@ -529,7 +530,7 @@ test("a whole game — spins, skips and doubles — is accepted move by move", a
     v: ENGINE.VERSION, code: ROOM, hostId: "alice", mode: "online", phase: "playing",
     lo0: st.lo0, hi0: st.hi0, lo: st.lo, hi: st.hi,
     bomb: ENGINE.hideNumber(secret), penalty: st.penalty,
-    players, seats, turn: st.turn, spin: st.spin, left: st.left,
+    players, seats, turn: st.turn, dir: st.dir, spin: st.spin, left: st.left,
     history: st.history, over: st.over, loser: st.loser,
     createdAt: 1, updatedAt: 1
   });
@@ -551,10 +552,11 @@ test("a whole game — spins, skips and doubles — is accepted move by move", a
     await assertSucceeds(me.update({ spin: st.spin, left: st.left, updatedAt: ++guard }));
 
     // 2. what the spin bought you
-    if (st.spin === "skip"){
-      st = ENGINE.endSkip(st, "not today");
+    if (ENGINE.PASSES.includes(st.spin)){
+      st = ENGINE.endPass(st, "not today");
       await assertSucceeds(me.update({
-        turn: st.turn, history: st.history, spin: "", left: 0, updatedAt: ++guard
+        turn: st.turn, dir: st.dir, history: st.history,
+        spin: "", left: 0, updatedAt: ++guard
       }));
       continue;
     }
@@ -565,7 +567,7 @@ test("a whole game — spins, skips and doubles — is accepted move by move", a
         : Math.floor((st.lo + st.hi) / 2);
       st = ENGINE.applyGuess(st, g, "here goes");
       await assertSucceeds(db(mover).doc(`rooms/${ROOM}`).update({
-        lo: st.lo, hi: st.hi, turn: st.turn, history: st.history,
+        lo: st.lo, hi: st.hi, turn: st.turn, dir: st.dir, history: st.history,
         spin: st.spin, left: st.left, over: st.over, loser: st.loser, updatedAt: ++guard
       }));
     }
@@ -586,6 +588,116 @@ test("a whole game — spins, skips and doubles — is accepted move by move", a
   const again = ENGINE.rematch(st, 60);
   await assertSucceeds(db("alice").doc(`rooms/${ROOM}`).update({
     lo: again.lo, hi: again.hi, bomb: ENGINE.hideNumber(60),
-    turn: again.turn, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: ++guard
+    turn: again.turn, dir: 1, spin: "", left: 0, history: [], over: false, loser: null, updatedAt: ++guard
   }));
+});
+
+// --- Reverse and Immediate Death --------------------------------------------
+// NOTE: at the time of writing these rules exceed Firestore's 1000-expression
+// budget on *refused* writes (see HANDOFF §8). Every assertFails below is
+// therefore weaker than it looks — the write is denied, but possibly for
+// exhaustion rather than on merit. The assertSucceeds cases are unaffected,
+// because an accepted write short-circuits early.
+
+const spun = (outcome, over = {}) => playing({
+  spin: outcome, left: outcome === "double" ? 2 : outcome === "normal" ? 1 : 0, ...over
+});
+
+test("a reverse turns the table and passes over the player who pulled it", async () => {
+  await seed(spun("reverse"));                        // alice (0) is up, dir 1
+  await assertSucceeds(db("alice").doc(`rooms/${ROOM}`).update({
+    ...done, lo: 1, hi: 100, turn: 2, dir: -1, history: [{ p: 0, side: "reverse" }]
+  }), "alice is passed over and play doubles back to cara");
+});
+
+test("a reverse cannot move the bounds, keep the direction, or pick a seat", async () => {
+  for (const [label, patch] of [
+    ["kept going forwards", { turn: 1, dir: 1 }],
+    ["turned but went on anyway", { turn: 1, dir: -1 }],
+    ["skipped two back", { turn: 1, dir: -1, history: [{ p: 0, side: "reverse" }] }],
+    ["moved the floor", { turn: 2, dir: -1, lo: 30 }],
+    ["smuggled a guess", { turn: 2, dir: -1, history: [{ p: 0, g: 30, side: "reverse" }] }],
+    ["claimed it for someone else", { turn: 2, dir: -1, history: [{ p: 1, side: "reverse" }] }]
+  ]){
+    await env.clearFirestore();
+    await seed(spun("reverse"));
+    await assertFails(db("alice").doc(`rooms/${ROOM}`).update({
+      ...done, lo: 1, hi: 100, turn: 2, dir: -1, history: [{ p: 0, side: "reverse" }], ...patch
+    }), label);
+  }
+});
+
+test("a reverse cannot be claimed without a reverse on the wheel", async () => {
+  for (const spin of ["", "skip", "normal", "double"]){
+    await env.clearFirestore();
+    await seed(spun(spin || ""));
+    await assertFails(db("alice").doc(`rooms/${ROOM}`).update({
+      ...done, lo: 1, hi: 100, turn: 2, dir: -1, history: [{ p: 0, side: "reverse" }]
+    }), `spin was "${spin}"`);
+  }
+});
+
+test("play keeps going backwards once the table has turned", async () => {
+  await seed(playing({ dir: -1, turn: 2, spin: "normal", left: 1 }));
+  await assertSucceeds(db("cara").doc(`rooms/${ROOM}`).update({
+    ...done, lo: 30, hi: 100, turn: 1, dir: -1, history: [{ p: 2, g: 30, side: "low" }]
+  }), "cara -> bob, not cara -> alice");
+  await env.clearFirestore();
+  await seed(playing({ dir: -1, turn: 2, spin: "normal", left: 1 }));
+  await assertFails(db("cara").doc(`rooms/${ROOM}`).update({
+    ...done, lo: 30, hi: 100, turn: 0, dir: -1, history: [{ p: 2, g: 30, side: "low" }]
+  }), "a guess must not quietly un-reverse the table");
+});
+
+test("Immediate Death ends the game on an unspun turn", async () => {
+  await seed(playing({ spin: "", left: 0 }));                               // spin "", left 0
+  await assertSucceeds(db("alice").doc(`rooms/${ROOM}`).update({
+    history: [{ p: 0, side: "dead" }], over: true, loser: 0, updatedAt: 1
+  }));
+});
+
+test("Immediate Death cannot be faked onto somebody else or after a spin", async () => {
+  await env.clearFirestore();
+  await seed(playing({ spin: "", left: 0 }));
+  await assertFails(db("alice").doc(`rooms/${ROOM}`).update({
+    history: [{ p: 0, side: "dead" }], over: true, loser: 1, updatedAt: 1
+  }), "cannot blame someone else");
+
+  await env.clearFirestore();
+  await seed(playing({ spin: "", left: 0 }));
+  await assertFails(db("bob").doc(`rooms/${ROOM}`).update({
+    history: [{ p: 1, side: "dead" }], over: true, loser: 1, updatedAt: 1
+  }), "cannot die out of turn");
+
+  for (const spin of ["normal", "double", "skip", "reverse"]){
+    await env.clearFirestore();
+    await seed(spun(spin));
+    await assertFails(db("alice").doc(`rooms/${ROOM}`).update({
+      history: [{ p: 0, side: "dead" }], over: true, loser: 0, updatedAt: 1
+    }), `already spun ${spin}`);
+  }
+});
+
+test("Immediate Death cannot carry a guess or move the range", async () => {
+  for (const [label, patch] of [
+    ["smuggled a guess", { history: [{ p: 0, g: 42, side: "dead" }] }],
+    ["moved the floor", { lo: 30 }],
+    ["moved the turn on", { turn: 1 }],
+    ["turned the table", { dir: -1 }],
+    ["left the game running", { over: false, loser: null }]
+  ]){
+    await env.clearFirestore();
+    await seed(playing({ spin: "", left: 0 }));
+    await assertFails(db("alice").doc(`rooms/${ROOM}`).update({
+      history: [{ p: 0, side: "dead" }], over: true, loser: 0, updatedAt: 1, ...patch
+    }), label);
+  }
+});
+
+test("a room opens and starts facing forwards", async () => {
+  await assertFails(db("alice").doc(`rooms/${ROOM}`).set(lobby({ dir: -1 })));
+  await env.clearFirestore();
+  await seed(lobby(), { alice: "Alice", bob: "Bob", cara: "Cara" });
+  await assertFails(db("alice").doc(`rooms/${ROOM}`).update({ ...START, dir: -1 }));
+  await assertSucceeds(db("alice").doc(`rooms/${ROOM}`).update(START));
 });
